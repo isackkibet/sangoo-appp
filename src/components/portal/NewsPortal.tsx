@@ -214,14 +214,22 @@ export default function NewsPortal() {
               <button onClick={() => setSearchTerm("")} aria-label="Clear search" className="w-9 h-9 rounded-full hover:bg-slate-100 text-slate-500 flex items-center justify-center"><X size={18} /></button>
             )}
           </label>
-          <nav className="flex flex-wrap gap-x-6 gap-y-2 mt-6 text-[14px] font-semibold text-slate-200" aria-label="Sections">
-            <a href="#latest-news" className="hover:text-white">All stories</a>
-            {media.length > 0 && <a href="#media" className="hover:text-white">Photos &amp; videos</a>}
-            <a href="#podcasts" className="hover:text-white">Podcasts</a>
-            {events.length > 0 && <a href="#events" className="hover:text-white">Events</a>}
-            <Link href="/portal/submit" className="ml-auto inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-sky-500 hover:bg-sky-400 text-white text-[13px] font-semibold transition-colors">
-              + Submit article
-            </Link>
+          <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 text-[14px] font-semibold text-slate-200" aria-label="Sections">
+            <a href="#latest-news" className="hover:text-white transition-colors">All stories</a>
+            {media.length > 0 && <a href="#media" className="hover:text-white transition-colors">Photos &amp; videos</a>}
+            <a href="#podcasts" className="hover:text-white transition-colors">Podcasts</a>
+            {events.length > 0 && <a href="#events" className="hover:text-white transition-colors">Events</a>}
+            <div className="ml-auto flex flex-wrap gap-2">
+              <Link href="/portal/submit" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500 hover:bg-sky-400 text-white text-[12px] font-semibold transition-colors">
+                + Article
+              </Link>
+              <Link href="/portal/submit/podcast" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold border border-white/20 transition-colors">
+                🎙 Podcast
+              </Link>
+              <Link href="/portal/submit/event" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-[12px] font-semibold border border-white/20 transition-colors">
+                📅 Event
+              </Link>
+            </div>
           </nav>
         </div>
       </header>
