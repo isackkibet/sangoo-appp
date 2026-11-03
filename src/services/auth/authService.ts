@@ -3,31 +3,16 @@
  * Handles user authentication, sessions, and access control
  */
 
-import { supabase } from '@/utils/supabase/client';
-import { User, WaitlistEntry } from '@/types';
+import { WaitlistEntry } from '@/types';
 
 export const authService = {
   /**
-   * Handle Google Sign-In
+   * Handle Google Sign-In (served by the Neon-backed auth routes)
    */
-  async signInWithGoogle(): Promise<void> {
-    try {
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-      });
-
-      if (error) {
-        console.error('Google sign-in error:', error);
-        throw new Error(error.message);
-      }
-
-      if (data?.url) {
-        window.location.href = data.url;
-      }
-    } catch (error) {
-      console.error('Sign-in failed:', error);
-      throw error;
-    }
+  async signInWithGoogle(next?: string): Promise<void> {
+    if (typeof window === 'undefined') return;
+    const target = next ?? `${window.location.pathname}${window.location.search}`;
+    window.location.assign(`/api/auth/google?next=${encodeURIComponent(target)}`);
   },
 
   /**
