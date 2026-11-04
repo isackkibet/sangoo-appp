@@ -1,7 +1,8 @@
 import React, { useState } from "react";
 import Image from "next/image";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
-import { Megaphone, Leaf, Eye, ShieldAlert, LucideIcon } from "lucide-react";
+import { Megaphone, Leaf, Eye, ShieldAlert } from "lucide-react";
+import type { LucideIcon } from "@/types/icon";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 
 interface PillarCardProps {

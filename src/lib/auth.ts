@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import { promisify } from "node:util";
 import { getSql, hasDatabase } from "@/lib/db";
+import { mediaUsername } from "@/lib/media/user";
 
 const scrypt = promisify(scryptCallback) as (
   password: string | Buffer,
@@ -29,6 +30,14 @@ export type AuthUser = {
   avatarUrl: string | null;
   role: string;
   createdAt: string;
+  username: string;
+  bio: string;
+  website: string | null;
+  location: string | null;
+  isVerified: boolean;
+  isPrivate: boolean;
+  isSuspended: boolean;
+  reporterVerified: boolean;
 };
 
 export type UserRow = {
@@ -41,6 +50,14 @@ export type UserRow = {
   email_verified: boolean;
   role: string;
   created_at: string | Date;
+  username?: string | null;
+  bio?: string | null;
+  website?: string | null;
+  location?: string | null;
+  is_verified?: boolean;
+  is_private?: boolean;
+  is_suspended?: boolean;
+  reporter_verified?: boolean;
 };
 
 export function normalizeEmail(email: string): string {
@@ -55,7 +72,62 @@ export function publicUser(row: UserRow): AuthUser {
     avatarUrl: row.avatar_url,
     role: row.role,
     createdAt: new Date(row.created_at).toISOString(),
+    username: row.username || mediaUsername(row.name, row.email),
+    bio: row.bio ?? "",
+    website: row.website ?? null,
+    location: row.location ?? null,
+    isVerified: Boolean(row.is_verified),
+    isPrivate: Boolean(row.is_private),
+    isSuspended: Boolean(row.is_suspended),
+    reporterVerified: Boolean(row.reporter_verified),
   };
+}
+
+export function adminEmails(): string[] {
+  return (process.env.SIHU_ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((email) => normalizeEmail(email))
+    .filter(Boolean);
+}
+
+export function isPlatformAdmin(
+  user: Pick<AuthUser, "role" | "email"> | null,
+): boolean {
+  if (!user) return false;
+  if (user.role === "admin" || user.role === "moderator") return true;
+  return adminEmails().includes(normalizeEmail(user.email));
+}
+
+export async function getActiveSessionUser(): Promise<AuthUser | null> {
+  const user = await getSessionUser();
+  if (!user || user.isSuspended) return null;
+  return user;
+}
+
+export async function buildUsername(
+  preferred: string,
+  id: string,
+): Promise<string> {
+  const base =
+    preferred
+      .toLowerCase()
+      .replace(/[^a-z0-9._]/g, "")
+      .replace(/^[._]+|[._]+$/g, "")
+      .slice(0, 20) || "member";
+  const candidates = [
+    base.length >= 3 ? base : `${base}_sihu`,
+    `${base}_${id.slice(0, 4)}`.slice(0, 30),
+    `${base}_${id.slice(0, 8)}`.slice(0, 30),
+  ];
+  const sql = getSql();
+  for (const candidate of candidates) {
+    const rows = (await sql.query(
+      "SELECT 1 FROM users WHERE LOWER(username) = $1 LIMIT 1",
+      [candidate],
+    )) as unknown[];
+    if (rows.length === 0) return candidate;
+  }
+  return `${base}_${Date.now().toString(36)}`.slice(0, 30);
 }
 
 export async function findUserByEmail(email: string): Promise<UserRow | null> {

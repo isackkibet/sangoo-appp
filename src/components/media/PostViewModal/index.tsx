@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useState } from 'react';
 import { X, Heart, MessageCircle, Repeat2, Send, Bookmark, MoreHorizontal, BadgeCheck, MapPin } from 'lucide-react';
 import { usePostViewStore } from '@/store/media/modalStores';
+import { useMediaFeedStore } from '@/store/media/feedStore';
 import MediaCarousel from '@/components/media/MediaCarousel';
 import CommentsList from '@/components/media/PostViewModal/CommentsList';
 import CommentInput from '@/components/media/PostViewModal/CommentInput';
@@ -18,16 +19,40 @@ function timeAgo(iso: string) {
 
 export default function PostViewModal() {
   const { isOpen, post, initialIndex, close } = usePostViewStore();
+  const livePost = useMediaFeedStore(s =>
+    post ? s.posts.find(p => p.id === post.id) : undefined,
+  );
+  const toggleLike = useMediaFeedStore(s => s.toggleLike);
+  const toggleRepost = useMediaFeedStore(s => s.toggleRepost);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
+  const [reposted, setReposted] = useState(false);
   const [comments, setComments] = useState<MediaComment[]>([]);
 
   if (!isOpen || !post) return null;
 
+  const real = Boolean(post.is_real);
+  const current = real && livePost ? livePost : post;
+  const isLiked = real ? current.is_liked : liked;
+  const isReposted = real ? Boolean(current.is_reposted) : reposted;
+  const totalLikes = real ? current.like_count : post.like_count + likeCount;
+
   const handleLike = () => {
+    if (real) {
+      void toggleLike(current);
+      return;
+    }
     setLiked(v => !v);
     setLikeCount(c => (liked ? c - 1 : c + 1));
+  };
+
+  const handleRepost = () => {
+    if (real) {
+      void toggleRepost(current);
+      return;
+    }
+    setReposted(v => !v);
   };
 
   const handleComment = (text: string) => {
@@ -126,14 +151,17 @@ export default function PostViewModal() {
             <div className="flex items-center gap-1 px-3 py-2">
               <button
                 onClick={handleLike}
-                className={`p-2 rounded-full transition-colors ${liked ? 'text-red-500' : 'text-slate-600 hover:text-slate-900'}`}
+                className={`p-2 rounded-full transition-colors ${isLiked ? 'text-red-500' : 'text-slate-600 hover:text-slate-900'}`}
               >
-                <Heart size={22} fill={liked ? 'currentColor' : 'none'} strokeWidth={1.8} />
+                <Heart size={22} fill={isLiked ? 'currentColor' : 'none'} strokeWidth={1.8} />
               </button>
               <button className="p-2 rounded-full text-slate-600 hover:text-slate-900">
                 <MessageCircle size={22} strokeWidth={1.8} />
               </button>
-              <button className="p-2 rounded-full text-slate-600 hover:text-slate-900">
+              <button
+                onClick={handleRepost}
+                className={`p-2 rounded-full transition-colors ${isReposted ? 'text-emerald-600' : 'text-slate-600 hover:text-slate-900'}`}
+              >
                 <Repeat2 size={22} strokeWidth={1.8} />
               </button>
               <button className="p-2 rounded-full text-slate-600 hover:text-slate-900">
@@ -149,7 +177,7 @@ export default function PostViewModal() {
             <div className="px-4 pb-1">
               {!post.hide_likes && (
                 <p className="text-[13px] font-semibold text-slate-900">
-                  {(post.like_count + likeCount).toLocaleString()} likes
+                  {totalLikes.toLocaleString()} likes
                 </p>
               )}
               <p className="text-[11px] text-slate-400 mt-0.5">{timeAgo(post.created_at)}</p>

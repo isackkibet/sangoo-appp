@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import {
+  buildUsername,
   createSession,
   findUserByEmail,
   hashPassword,
@@ -72,12 +73,16 @@ export async function POST(req: Request) {
 
     const id = randomUUID();
     const passwordHash = await hashPassword(password);
+    const username = await buildUsername(
+      name || email.split("@")[0],
+      id,
+    );
     const sql = getSql();
     const rows = (await sql.query(
-      `INSERT INTO users (id, email, name, password_hash, email_verified)
-       VALUES ($1, $2, $3, $4, FALSE)
+      `INSERT INTO users (id, email, name, username, password_hash, email_verified)
+       VALUES ($1, $2, $3, $4, $5, FALSE)
        RETURNING *`,
-      [id, email, name || email.split("@")[0], passwordHash],
+      [id, email, name || email.split("@")[0], username, passwordHash],
     )) as UserRow[];
 
     await createSession(id);

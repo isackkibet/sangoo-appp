@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import MediaCarousel from '@/components/media/MediaCarousel';
 import { usePostViewStore } from '@/store/media/modalStores';
+import { useMediaFeedStore } from '@/store/media/feedStore';
 import type { MediaPost } from '@/lib/media/mockData';
 
 function timeAgo(iso: string) {
@@ -36,28 +37,52 @@ interface Props {
 }
 
 export default function MediaPostCard({ post }: Props) {
-  const [liked, setLiked] = useState(post.is_liked);
+  const real = Boolean(post.is_real);
+  const toggleLike = useMediaFeedStore(s => s.toggleLike);
+  const toggleRepost = useMediaFeedStore(s => s.toggleRepost);
+  const [localLiked, setLocalLiked] = useState(post.is_liked);
   const [saved, setSaved] = useState(post.is_saved);
-  const [likeCount, setLikeCount] = useState(post.like_count);
+  const [localLikeCount, setLocalLikeCount] = useState(post.like_count);
+  const [localReposted, setLocalReposted] = useState(post.is_reposted);
+  const [localRepostCount, setLocalRepostCount] = useState(post.repost_count ?? 0);
   const { open: openModal } = usePostViewStore();
 
+  const liked = real ? post.is_liked : localLiked;
+  const likeCount = real ? post.like_count : localLikeCount;
+  const reposted = real ? Boolean(post.is_reposted) : localReposted;
+  const repostCount = real ? post.repost_count ?? 0 : localRepostCount;
+
   const handleLike = () => {
-    setLiked(v => !v);
-    setLikeCount(c => (liked ? c - 1 : c + 1));
+    if (real) {
+      void toggleLike(post);
+      return;
+    }
+    setLocalLiked(v => !v);
+    setLocalLikeCount(c => (localLiked ? c - 1 : c + 1));
+  };
+
+  const handleRepost = () => {
+    if (real) {
+      void toggleRepost(post);
+      return;
+    }
+    setLocalReposted(v => !v);
+    setLocalRepostCount(c => (localReposted ? c - 1 : c + 1));
   };
 
   const openPost = () => openModal(post);
 
+  const mediaSize = post.images[0] ?? post.videos[0];
   const aspectRatio = safeAspectRatio(
-    post.images[0]?.width ?? 1,
-    post.images[0]?.height ?? 1,
+    mediaSize?.width ?? 1,
+    mediaSize?.height ?? 1,
   );
 
   return (
     <article className="border-b border-slate-100 pb-4">
       {/* Header */}
       <div className="flex items-center justify-between px-3 sm:px-1 pt-4 pb-3">
-        <Link href={`/media/profile/${post.user.username}`} className="flex items-center gap-2.5">
+        <Link href="/media/profile" className="flex items-center gap-2.5">
           <Image
             src={post.user.avatar_url}
             alt={post.user.username}
@@ -109,7 +134,12 @@ export default function MediaPostCard({ post }: Props) {
         >
           <MessageCircle size={22} strokeWidth={1.8} />
         </button>
-        <button className="p-2 rounded-full text-slate-500 active:scale-90 transition-all">
+        <button
+          onClick={handleRepost}
+          className={`p-2 rounded-full active:scale-90 transition-all ${
+            reposted ? 'text-emerald-600' : 'text-slate-500'
+          }`}
+        >
           <Repeat2 size={22} strokeWidth={1.8} />
         </button>
         <button className="p-2 rounded-full text-slate-500 active:scale-90 transition-all">
@@ -132,9 +162,14 @@ export default function MediaPostCard({ post }: Props) {
             {formatCount(likeCount)} likes
           </p>
         )}
+        {repostCount > 0 && (
+          <p className="text-[12px] font-semibold text-emerald-700">
+            {formatCount(repostCount)} reshares
+          </p>
+        )}
         <p className="text-[14px] text-slate-800 leading-snug line-clamp-3">
           <Link
-            href={`/media/profile/${post.user.username}`}
+            href="/media/profile"
             className="font-semibold mr-1 hover:underline"
           >
             {post.user.username}

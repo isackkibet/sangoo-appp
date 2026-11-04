@@ -105,7 +105,7 @@ export default function LoginPage() {
     } catch {
       /* ignore */
     }
-    router.replace(next ?? "/portal");
+    router.replace(next ?? "/media/feed");
   };
 
   const switchMode = (value: Mode) => {
@@ -144,7 +144,10 @@ export default function LoginPage() {
                   <CheckCircle2 size={18} className="text-emerald-600 shrink-0" /> {auth.name ? `${auth.name} · ` : ""}{auth.email ?? "your account"}
                 </p>
                 <div className="mt-8 space-y-3">
-                  <Link href="/portal" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full bg-slate-900 hover:bg-sky-600 text-white text-[15px] font-semibold transition-colors">
+                  <Link href="/media/feed" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full bg-slate-900 hover:bg-sky-600 text-white text-[15px] font-semibold transition-colors">
+                    <Newspaper size={17} /> Go to media
+                  </Link>
+                  <Link href="/portal" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full border border-slate-300 hover:border-slate-900 text-slate-800 text-[15px] font-semibold transition-colors">
                     <Newspaper size={17} /> Go to the news
                   </Link>
                   <Link href="/verify" className="flex items-center justify-center gap-2 w-full py-3.5 rounded-full border border-slate-300 hover:border-slate-900 text-slate-800 text-[15px] font-semibold transition-colors">

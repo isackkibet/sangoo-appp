@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MEDIA_POSTS } from '@/lib/media/mockData';
 import MediaPostCard from '@/components/media/MediaPostCard';
+import { useMediaFeedStore } from '@/store/media/feedStore';
 
 const TABS = [
   { label: 'For You', value: 'home' },
@@ -15,9 +16,20 @@ export default function PostFeed() {
   const [tab, setTab] = useState<'home' | 'following'>('home');
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const realPosts = useMediaFeedStore(s => s.posts);
+  const load = useMediaFeedStore(s => s.load);
 
-  const posts = MEDIA_POSTS.slice(0, visibleCount);
-  const hasMore = visibleCount < MEDIA_POSTS.length;
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const allPosts = useMemo(() => {
+    const ids = new Set(realPosts.map(p => p.id));
+    return [...realPosts, ...MEDIA_POSTS.filter(p => !ids.has(p.id))];
+  }, [realPosts]);
+
+  const posts = allPosts.slice(0, visibleCount);
+  const hasMore = visibleCount < allPosts.length;
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -25,14 +37,14 @@ export default function PostFeed() {
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting && hasMore) {
-          setVisibleCount(c => Math.min(c + PAGE_SIZE, MEDIA_POSTS.length));
+          setVisibleCount(c => Math.min(c + PAGE_SIZE, allPosts.length));
         }
       },
       { threshold: 0.1 },
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore]);
+  }, [hasMore, allPosts.length]);
 
   return (
     <div>

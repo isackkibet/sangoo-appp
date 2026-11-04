@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Search, X } from 'lucide-react';
 import { useMediaSearchStore } from '@/store/media/modalStores';
 import { MEDIA_SUGGESTED_USERS, MEDIA_POSTS } from '@/lib/media/mockData';
+import { mediaAvatar } from '@/lib/media/user';
 
 export default function SearchPanel() {
   const { isOpen, close } = useMediaSearchStore();
@@ -56,7 +57,7 @@ export default function SearchPanel() {
           {matchedUsers.map(u => (
             <div key={u.id} className="flex items-center gap-3 py-2.5 rounded-xl hover:bg-slate-50 px-1 -mx-1 transition-colors">
               <Image
-                src={u.avatar_url}
+                src={mediaAvatar(u.full_name, null, u.avatar_url)}
                 alt={u.full_name}
                 width={44}
                 height={44}

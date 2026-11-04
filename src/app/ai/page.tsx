@@ -5,8 +5,9 @@ import Link from "next/link";
 import NewsHeader from "@/components/portal/NewsHeader";
 import {
   Bot, Send, Mic, MicOff, Paperclip, X, Volume2, VolumeX, Square, BookOpen, Activity, Gift, Newspaper,
-  Search, Waves, Gavel, Plus, PanelLeft, Sparkles, User, type LucideIcon,
+  Search, Waves, Gavel, Plus, PanelLeft, Sparkles, User,
 } from "lucide-react";
+import type { LucideIcon } from "@/types/icon";
 
 // Mobile detection hook
 function useIsMobile() {

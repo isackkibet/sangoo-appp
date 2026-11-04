@@ -99,7 +99,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
       next ??
       (typeof window !== "undefined"
         ? `${window.location.pathname}${window.location.search}`
-        : "/portal");
+        : "/media/feed");
     window.location.assign(`/api/auth/google?next=${encodeURIComponent(target)}`);
   }, []);
 

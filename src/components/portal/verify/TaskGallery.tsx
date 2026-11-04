@@ -2,7 +2,8 @@
 
 import React, { useState } from 'react';
 import Image from 'next/image';
-import { Trees, Droplets, Fish, HeartPulse, MapPin, CheckCircle2, CalendarDays, type LucideIcon } from 'lucide-react';
+import { Trees, Droplets, Fish, HeartPulse, MapPin, CheckCircle2, CalendarDays } from 'lucide-react';
+import type { LucideIcon } from '@/types/icon';
 import { TASK_LIST, VERIFY_GROUPS, VerifyTask } from '../../../constants/verifyData';
 
 interface TaskGalleryProps {

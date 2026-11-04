@@ -4,6 +4,7 @@ import Image from 'next/image';
 import { useRef } from 'react';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { MEDIA_STORIES, MEDIA_USER } from '@/lib/media/mockData';
+import { mediaAvatar } from '@/lib/media/user';
 
 export default function StoriesRow() {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -41,7 +42,7 @@ export default function StoriesRow() {
         <div className="flex flex-col items-center gap-1.5 shrink-0">
           <div className="relative">
             <Image
-              src={MEDIA_USER.avatar_url}
+              src={mediaAvatar(null, null, MEDIA_USER.avatar_url)}
               alt="Your story"
               width={52}
               height={52}
@@ -66,7 +67,7 @@ export default function StoriesRow() {
               }`}
             >
               <Image
-                src={s.avatarUrl}
+                src={mediaAvatar(s.username, null, s.avatarUrl)}
                 alt={s.username}
                 width={48}
                 height={48}

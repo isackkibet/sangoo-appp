@@ -2,9 +2,9 @@ import React, { useState } from "react";
 import Image from "next/image";
 import RevealOnScroll from "@/components/ui/RevealOnScroll";
 import { 
-  Newspaper, Users, Briefcase, Building2, Laptop, ShieldCheck, 
-  LucideIcon 
+  Newspaper, Users, Briefcase, Building2, Laptop, ShieldCheck 
 } from "lucide-react";
+import type { LucideIcon } from "@/types/icon";
 import { motion, useMotionValue, useSpring, useTransform } from "framer-motion";
 
 interface ObjectiveCardProps {

@@ -55,6 +55,12 @@ export async function POST(req: Request) {
         { status: 401 },
       );
     }
+    if (user.is_suspended) {
+      return NextResponse.json(
+        { error: "This account is suspended. Contact the SIHU team for help." },
+        { status: 403 },
+      );
+    }
 
     await createSession(user.id);
 

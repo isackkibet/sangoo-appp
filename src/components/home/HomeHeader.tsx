@@ -62,7 +62,7 @@ export default function HomeHeader() {
             <a href="#intro" className="px-4 py-2 hover:text-primary transition-colors">Intro</a>
             <a href="#pillars" className="px-4 py-2 hover:text-primary transition-colors">Pillars</a>
             <div className="w-[1px] h-4 bg-white/20 mx-2" />
-            <Link href="/login" className="px-5 py-2 hover:text-primary transition-all">
+            <Link href="/login?next=/media/feed" className="px-5 py-2 hover:text-primary transition-all">
               Login
             </Link>
             <Link href="/portal" className="px-6 py-2.5 bg-primary text-white rounded-xl hover:bg-white hover:text-slate-950 transition-all shadow-xl shadow-primary/20 ml-2">
@@ -96,7 +96,7 @@ export default function HomeHeader() {
                 <Link href="/portal" onClick={() => setMobileMenuOpen(false)} className="bg-primary text-white py-5 rounded-2xl shadow-xl shadow-primary/20">
                   Global Info Portal
                 </Link>
-                <Link href="/login" onClick={() => setMobileMenuOpen(false)} className="border border-white/20 text-white py-4 rounded-2xl bg-white/5">
+                <Link href="/login?next=/media/feed" onClick={() => setMobileMenuOpen(false)} className="border border-white/20 text-white py-4 rounded-2xl bg-white/5">
                   Log In
                 </Link>
               </div>

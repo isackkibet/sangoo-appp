@@ -69,6 +69,27 @@ export default function MediaCarousel({
     setHeartCount(c => c + 1);
   };
 
+  const video = post.videos[0];
+
+  if (!current && video) {
+    return (
+      <div className="flex flex-col">
+        <div
+          className="relative w-full overflow-hidden rounded-lg sm:rounded-xl bg-black"
+          style={{ aspectRatio: aspectRatio ?? '9 / 16', maxHeight: '75svh' }}
+        >
+          <video
+            src={video.url}
+            controls
+            playsInline
+            preload="metadata"
+            className="h-full w-full object-contain"
+          />
+        </div>
+      </div>
+    );
+  }
+
   if (!current) return null;
 
   return (

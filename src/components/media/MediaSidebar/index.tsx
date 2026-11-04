@@ -7,7 +7,9 @@ import {
   Home, Search, Compass, Film, Send, Heart, PlusSquare, User, ArrowLeft,
 } from 'lucide-react';
 import { useMediaSearchStore, useMediaNotificationsStore, useCreatePostStore } from '@/store/media/modalStores';
-import { MEDIA_USER } from '@/lib/media/mockData';
+
+import { useSihuAuth } from '@/components/auth/SihuAuth';
+import { mediaAvatar, mediaFullName, mediaUsername } from '@/lib/media/user';
 
 type NavAction = { href: string } | { action: () => void };
 
@@ -80,6 +82,17 @@ function MobileNavItem({ item, on }: { item: NavItem; on: boolean }) {
 export default function MediaSidebar() {
   const path = usePathname() ?? '';
   const navItems = useNav();
+  const auth = useSihuAuth();
+
+  const profileName = auth.signedIn
+    ? mediaUsername(auth.user?.name, auth.user?.email)
+    : mediaUsername(null, null);
+  const profileFullName = auth.signedIn
+    ? mediaFullName(auth.user?.name, auth.user?.email)
+    : mediaFullName(null, null);
+  const profileAvatar = auth.signedIn
+    ? mediaAvatar(auth.user?.name, auth.user?.email, auth.user?.avatarUrl)
+    : mediaAvatar(null, null);
 
   const active = (item: NavItem) => {
     if (!('href' in item.nav)) return false;
@@ -124,15 +137,15 @@ export default function MediaSidebar() {
             className="flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-slate-50 transition-colors"
           >
             <Image
-              src={MEDIA_USER.avatar_url}
-              alt={MEDIA_USER.full_name}
+              src={profileAvatar}
+              alt={profileFullName}
               width={36}
               height={36}
               className="rounded-full object-cover ring-2 ring-sky-400"
             />
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-slate-900 truncate">{MEDIA_USER.username}</p>
-              <p className="text-[12px] text-slate-500 truncate">{MEDIA_USER.full_name}</p>
+              <p className="text-[13px] font-semibold text-slate-900 truncate">{profileName}</p>
+              <p className="text-[12px] text-slate-500 truncate">{profileFullName}</p>
             </div>
           </Link>
         </div>

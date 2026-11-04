@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 import {
   OAUTH_NEXT_COOKIE,
   OAUTH_STATE_COOKIE,
+  buildUsername,
   createSession,
   findUserByEmail,
   googleRedirectUri,
@@ -98,24 +99,31 @@ export async function GET(request: Request) {
     let userId: string;
 
     if (existing) {
+      if (existing.is_suspended) {
+        return failure(request.url, "suspended");
+      }
       userId = existing.id;
+      const username =
+        existing.username || (await buildUsername(name, existing.id));
       await sql.query(
         `UPDATE users
          SET google_id = COALESCE(google_id, $1),
              email_verified = TRUE,
              name = COALESCE(NULLIF(name, ''), $2),
              avatar_url = COALESCE(avatar_url, $3),
+             username = COALESCE(NULLIF(username, ''), $4),
              updated_at = NOW()
-         WHERE id = $4`,
-        [googleId, name, picture, userId],
+         WHERE id = $5`,
+        [googleId, name, picture, username, userId],
       );
     } else {
       userId = randomUUID();
+      const username = await buildUsername(name, userId);
       const rows = (await sql.query(
-        `INSERT INTO users (id, email, name, avatar_url, google_id, email_verified)
-         VALUES ($1, $2, $3, $4, $5, TRUE)
+        `INSERT INTO users (id, email, name, username, avatar_url, google_id, email_verified)
+         VALUES ($1, $2, $3, $4, $5, $6, TRUE)
          RETURNING id`,
-        [userId, email, name, picture, googleId],
+        [userId, email, name, username, picture, googleId],
       )) as Pick<UserRow, "id">[];
       userId = rows[0].id;
     }
