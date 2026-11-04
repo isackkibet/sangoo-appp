@@ -1,0 +1,7 @@
+﻿src/lib/media/mockData.ts(32,13): error TS1005: ';' expected.
+src/lib/media/mockData.ts(33,14): error TS1005: ';' expected.
+src/lib/media/mockData.ts(34,15): error TS1005: ';' expected.
+src/lib/media/mockData.ts(35,16): error TS1005: ';' expected.
+src/lib/media/mockData.ts(36,3): error TS1109: Expression expected.
+src/lib/media/mockData.ts(36,4): error TS1128: Declaration or statement expected.
+src/lib/media/mockData.ts(37,1): error TS1128: Declaration or statement expected.

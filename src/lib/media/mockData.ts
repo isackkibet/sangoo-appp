@@ -3,18 +3,33 @@
 // bundled with the app.
 export * from "./types";
 
-export const EXPLORE_POSTS = [];
-export const MEDIA_POSTS = [];
-export const MEDIA_NOTIFICATIONS = [];
-export const MEDIA_USER = {
+import type {
+  Conversation,
+  MediaNotification,
+  MediaPost,
+  MediaUser,
+  SuggestedUser,
+} from "./types";
+
+export const EXPLORE_POSTS: MediaPost[] = [];
+export const MEDIA_POSTS: MediaPost[] = [];
+export const MEDIA_NOTIFICATIONS: MediaNotification[] = [];
+export const MEDIA_USER: MediaUser & {
+  posts: number;
+  followers: number;
+  following: number;
+} = {
+  id: "member",
   username: "member",
   full_name: "SIHU member",
   avatar_url: "",
-  posts: [],
+  bio: null,
+  posts: 0,
   is_verified: false,
+  is_private: false,
   followers: 0,
   following: 0,
-  website: "",
+  website: null,
 };
 
 export const MEDIA_STORIES = [
@@ -26,12 +41,5 @@ export const MEDIA_STORIES = [
   },
 ];
 
-export const MEDIA_CONVERSATIONS = [];
-  {
-    id: "user_1",
-    username: "member",
-    full_name: "SIHU member",
-    avatar_url: "",
-    is_verified: false,
-  },
-];
+export const MEDIA_CONVERSATIONS: Conversation[] = [];
+export const MEDIA_SUGGESTED_USERS: SuggestedUser[] = [];

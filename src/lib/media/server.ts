@@ -84,12 +84,22 @@ function rowToPost(row: PostRow): MediaPost {
               width,
               height,
               alt_text: row.image_alt || row.caption,
+              kind: "image",
             },
           ]
         : [],
     videos:
       row.image_id && kind === "video"
-        ? [{ id: row.image_id, url: mediaUrl, width, height }]
+        ? [
+            {
+              id: row.image_id,
+              url: mediaUrl,
+              width,
+              height,
+              alt_text: row.image_alt || row.caption,
+              kind: "video",
+            },
+          ]
         : [],
     user: {
       id: row.author_id,
