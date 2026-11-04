@@ -26,7 +26,7 @@ export const MEDIA_STORIES = [
   },
 ];
 
-export const MEDIA_SUGGESTED_USERS = [
+export const MEDIA_CONVERSATIONS = [];
   {
     id: "user_1",
     username: "member",
