@@ -2,15 +2,109 @@ import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { MAX_VIDEO_BYTES } from "@/lib/media/validation";
 
-const BUCKET = process.env.SUPABASE_STORAGE_BUCKET?.trim() || "media";
+function normalizeBucketName(value: string | undefined): string {
+  // Accept values like `media # comment` and avoid using a comment as the bucket name.
+  return (value ?? "").trim().split(/[\s#]/)[0] || "media";
+}
+
+const BUCKET = normalizeBucketName(process.env.SUPABASE_STORAGE_BUCKET);
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+
+const ALLOWED_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "video/mp4",
+  "video/webm",
+  "video/quicktime",
+];
 
 export type StorageProvider = "supabase" | "local";
 
 export function storageConfigured(): boolean {
   return Boolean(SUPABASE_URL && SUPABASE_KEY) || process.env.MEDIA_STORAGE === "local";
+}
+
+export function storageBucket(): string {
+  return BUCKET;
+}
+
+export async function ensureMediaBucket(): Promise<string> {
+  const supabase = createSupabaseAdminClient();
+  const { data, error } = await supabase.storage.getBucket(BUCKET);
+
+  if (error || !data) {
+    const { error: createError } = await supabase.storage.createBucket(BUCKET, {
+      public: true,
+      allowedMimeTypes: ALLOWED_MIME_TYPES,
+      fileSizeLimit: MAX_VIDEO_BYTES,
+    });
+    if (createError && !/already exists|duplicate/i.test(createError.message)) {
+      throw new Error(`Could not create storage bucket "${BUCKET}": ${createError.message}`);
+    }
+  } else if (!data.public) {
+    const { error: updateError } = await supabase.storage.updateBucket(BUCKET, {
+      public: true,
+      allowedMimeTypes: ALLOWED_MIME_TYPES,
+      fileSizeLimit: MAX_VIDEO_BYTES,
+    });
+    if (updateError) {
+      throw new Error(`Could not make storage bucket "${BUCKET}" public: ${updateError.message}`);
+    }
+  }
+
+  return BUCKET;
+}
+
+export interface UploadTarget {
+  path: string;
+  token: string;
+  signedUrl: string;
+  publicUrl: string;
+}
+
+export async function createUploadTarget(
+  userId: string,
+  mime: string,
+): Promise<UploadTarget> {
+  if (!SUPABASE_URL || !SUPABASE_KEY) {
+    throw new Error(
+      "Media storage is not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+    );
+  }
+
+  const bucket = await ensureMediaBucket();
+  const supabase = createSupabaseAdminClient();
+  const ext = extensionFor(mime);
+  const now = new Date();
+  const year = String(now.getUTCFullYear());
+  const month = String(now.getUTCMonth() + 1).padStart(2, "0");
+  const objectPath = `posts/${userId}/${year}/${month}/${randomUUID()}.${ext}`;
+
+  const { data, error } = await supabase.storage
+    .from(bucket)
+    .createSignedUploadUrl(objectPath);
+  if (error || !data) {
+    throw new Error(`Could not prepare upload: ${error?.message ?? "unknown error"}`);
+  }
+
+  const { data: publicData } = supabase.storage.from(bucket).getPublicUrl(objectPath);
+  return {
+    path: objectPath,
+    token: data.token,
+    signedUrl: data.signedUrl,
+    publicUrl: publicData.publicUrl,
+  };
+}
+
+export function publicUrlFor(storagePath: string): string {
+  const supabase = createSupabaseAdminClient();
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(storagePath);
+  return data.publicUrl;
 }
 
 function resolveProvider(): StorageProvider {
@@ -67,6 +161,7 @@ export async function putMedia(
   const objectPath = `${safePrefix}/${year}/${month}/${randomUUID()}.${ext}`;
 
   if (provider === "supabase") {
+    await ensureMediaBucket();
     const supabase = createSupabaseAdminClient();
     const { error } = await supabase.storage
       .from(BUCKET)

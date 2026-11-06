@@ -7,11 +7,19 @@ import {
   requireMediaUser,
 } from "@/lib/media/api";
 import { listPosts, createPost, type NewMediaInput } from "@/lib/media/service";
-import { putMedia, storageConfigured } from "@/lib/media/storage";
 import {
+  putMedia,
+  publicUrlFor,
+  removeMedia,
+  storageConfigured,
+} from "@/lib/media/storage";
+import {
+  MAX_ALT,
   MAX_MEDIA_PER_POST,
   asBool,
   clampInt,
+  mediaKindForMime,
+  sanitizeText,
   validateUpload,
 } from "@/lib/media/validation";
 
@@ -39,7 +47,7 @@ export async function GET(req: Request) {
       ? (scopeParam as Parameters<typeof listPosts>[0]["scope"])
       : "for-you";
 
-    let user = await optionalMediaUser();
+    const user = await optionalMediaUser();
     if (
       !user &&
       (scope === "following" || scope === "liked" || scope === "saved")
@@ -85,6 +93,102 @@ export async function POST(req: Request) {
         "Photo and video storage is not configured. Set the Supabase storage environment variables.",
         503,
       );
+    }
+
+    const contentType = req.headers.get("content-type") ?? "";
+    if (contentType.includes("application/json")) {
+      const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+      const rawMedia = Array.isArray(body.media) ? body.media : [];
+      if (rawMedia.length === 0) {
+        throw new ApiError("Add at least one photo or video.");
+      }
+      if (rawMedia.length > MAX_MEDIA_PER_POST) {
+        throw new ApiError(`You can share up to ${MAX_MEDIA_PER_POST} files at once.`);
+      }
+
+      const media: NewMediaInput[] = [];
+      for (const item of rawMedia) {
+        if (!item || typeof item !== "object") {
+          throw new ApiError("Invalid upload.");
+        }
+        const record = item as Record<string, unknown>;
+        const storagePath = typeof record.path === "string" ? record.path : "";
+        const mime = typeof record.mime === "string" ? record.mime.toLowerCase() : "";
+        const kind = mediaKindForMime(mime);
+        if (!kind) {
+          throw new ApiError("Upload a JPEG, PNG, WebP, GIF, MP4 or WebM file.");
+        }
+        if (
+          !storagePath.startsWith(`posts/${user.id}/`) ||
+          storagePath.includes("..") ||
+          !/^[A-Za-z0-9/_.-]+$/.test(storagePath)
+        ) {
+          throw new ApiError("Invalid upload path.");
+        }
+        const ext = storagePath.split(".").pop()?.toLowerCase() ?? "";
+        const allowedExt =
+          kind === "video"
+            ? ["mp4", "webm", "mov"]
+            : ["jpg", "jpeg", "png", "webp", "gif"];
+        if (!allowedExt.includes(ext)) {
+          throw new ApiError("Invalid upload path.");
+        }
+        media.push({
+          kind,
+          url: publicUrlFor(storagePath),
+          storagePath: `supabase:${storagePath}`,
+          mime,
+          width: clampInt(record.width, 1, 10000, 1080),
+          height: clampInt(record.height, 1, 10000, 1080),
+          durationMs:
+            record.durationMs == null
+              ? null
+              : clampInt(record.durationMs, 0, 3_600_000, 0),
+          altText: sanitizeText(record.altText, MAX_ALT),
+        });
+      }
+
+      let taggedUsernames: string[] = [];
+      if (Array.isArray(body.tagged)) {
+        taggedUsernames = body.tagged
+          .filter((name): name is string => typeof name === "string")
+          .slice(0, 10);
+      } else if (typeof body.tagged === "string" && body.tagged) {
+        try {
+          const parsed = JSON.parse(body.tagged);
+          if (Array.isArray(parsed)) {
+            taggedUsernames = parsed
+              .filter((name): name is string => typeof name === "string")
+              .slice(0, 10);
+          }
+        } catch {
+          taggedUsernames = [];
+        }
+      }
+
+      const visibilityRaw = String(body.visibility ?? "public");
+      try {
+        const post = await createPost(user.id, {
+          caption: String(body.caption ?? ""),
+          category: String(body.category ?? "community"),
+          locationName: String(body.locationName ?? ""),
+          visibility:
+            visibilityRaw === "followers" || visibilityRaw === "private"
+              ? visibilityRaw
+              : "public",
+          commentsOff: asBool(body.commentsOff),
+          hideLikes: asBool(body.hideLikes),
+          media,
+          taggedUsernames,
+        });
+        return NextResponse.json(
+          { post },
+          { status: 201, headers: { "Cache-Control": "no-store" } },
+        );
+      } catch (error) {
+        await Promise.all(media.map((item) => removeMedia(item.storagePath)));
+        throw error;
+      }
     }
 
     const form = await req.formData();
@@ -162,7 +266,6 @@ export async function POST(req: Request) {
     );
   } catch (error) {
     if (uploaded.length > 0) {
-      const { removeMedia } = await import("@/lib/media/storage");
       await Promise.all(uploaded.map((path) => removeMedia(path)));
     }
     return handleError(error);

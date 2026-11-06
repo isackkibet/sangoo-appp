@@ -14,6 +14,13 @@ const VIDEO_TYPES = new Set(["video/mp4", "video/webm", "video/quicktime"]);
 
 export type MediaKind = "image" | "video";
 
+export function mediaKindForMime(mime: string): MediaKind | null {
+  const value = mime.toLowerCase();
+  if (IMAGE_TYPES.has(value)) return "image";
+  if (VIDEO_TYPES.has(value)) return "video";
+  return null;
+}
+
 export function sanitizeText(value: unknown, max: number): string {
   if (typeof value !== "string") return "";
   return value

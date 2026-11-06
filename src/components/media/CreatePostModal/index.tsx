@@ -12,10 +12,16 @@ import { MEDIA_CATEGORIES } from '@/lib/media/categories';
 import type { MediaPost } from '@/lib/media/mockData';
 
 type Kind = 'image' | 'video';
-type Preview = { dataUrl: string; width: number; height: number; kind: Kind };
+type Preview = {
+  file: File;
+  previewUrl: string;
+  width: number;
+  height: number;
+  kind: Kind;
+};
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
-const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
+const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 
 async function prepareImage(file: File): Promise<Preview> {
   const bitmap = await createImageBitmap(file);
@@ -33,7 +39,28 @@ async function prepareImage(file: File): Promise<Preview> {
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
-  return { dataUrl: canvas.toDataURL('image/jpeg', 0.85), width, height, kind: 'image' };
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) resolve(result);
+        else reject(new Error('Your browser could not process that photo.'));
+      },
+      'image/jpeg',
+      0.85,
+    );
+  });
+
+  const uploadFile = new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', {
+    type: 'image/jpeg',
+  });
+
+  return {
+    file: uploadFile,
+    previewUrl: URL.createObjectURL(blob),
+    width,
+    height,
+    kind: 'image',
+  };
 }
 
 function prepareVideo(file: File): Promise<Preview> {
@@ -45,16 +72,7 @@ function prepareVideo(file: File): Promise<Preview> {
     video.onloadedmetadata = () => {
       const width = video.videoWidth || 720;
       const height = video.videoHeight || 1280;
-      const reader = new FileReader();
-      reader.onload = () => {
-        URL.revokeObjectURL(objectUrl);
-        resolve({ dataUrl: String(reader.result), width, height, kind: 'video' });
-      };
-      reader.onerror = () => {
-        URL.revokeObjectURL(objectUrl);
-        reject(new Error('Could not read that video.'));
-      };
-      reader.readAsDataURL(file);
+      resolve({ file, previewUrl: objectUrl, width, height, kind: 'video' });
     };
 
     video.onerror = () => {
@@ -69,7 +87,7 @@ function prepareVideo(file: File): Promise<Preview> {
 async function prepareMedia(file: File): Promise<Preview> {
   if (file.type.startsWith('video/')) {
     if (file.size > MAX_VIDEO_BYTES) {
-      throw new Error('That video is too large. Choose one under 30 MB.');
+      throw new Error('That video is too large. Choose one under 50 MB.');
     }
     return prepareVideo(file);
   }
@@ -110,6 +128,14 @@ export default function CreatePostModal() {
   }, [isOpen]);
 
   useEffect(() => {
+    return () => {
+      if (preview?.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(preview.previewUrl);
+      }
+    };
+  }, [preview]);
+
+  useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && !busy) close();
@@ -137,6 +163,35 @@ export default function CreatePostModal() {
     setError(null);
 
     try {
+      const signRes = await fetch('/api/media/uploads', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mime: preview.file.type, size: preview.file.size }),
+      });
+      const signed = (await signRes.json()) as {
+        path?: string;
+        signedUrl?: string;
+        error?: string;
+      };
+
+      if (!signRes.ok || !signed.signedUrl || !signed.path) {
+        throw new Error(signed.error || 'Could not prepare the upload.');
+      }
+
+      const form = new FormData();
+      form.append('cacheControl', '31536000');
+      form.append('', preview.file);
+      const uploadRes = await fetch(signed.signedUrl, {
+        method: 'PUT',
+        headers: { 'x-upsert': 'false' },
+        body: form,
+      });
+
+      if (!uploadRes.ok) {
+        const detail = await uploadRes.text().catch(() => '');
+        throw new Error(`Upload failed (${uploadRes.status}). ${detail}`.trim());
+      }
+
       const res = await fetch('/api/media/posts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -144,9 +199,17 @@ export default function CreatePostModal() {
           caption,
           category,
           locationName: location,
-          mediaDataUrl: preview.dataUrl,
-          width: preview.width,
-          height: preview.height,
+          media: [
+            {
+              path: signed.path,
+              mime: preview.file.type,
+              kind: preview.kind,
+              width: preview.width,
+              height: preview.height,
+              durationMs: null,
+              altText: caption,
+            },
+          ],
         }),
       });
       const data = (await res.json()) as { post?: MediaPost; error?: string };
@@ -207,14 +270,14 @@ export default function CreatePostModal() {
                 <div className="relative w-full max-h-[52vh] flex items-center justify-center">
                   {preview.kind === 'video' ? (
                     <video
-                      src={preview.dataUrl}
+                      src={preview.previewUrl}
                       controls
                       playsInline
                       className="max-h-[52vh] w-full object-contain"
                     />
                   ) : (
                     <Image
-                      src={preview.dataUrl}
+                      src={preview.previewUrl}
                       alt="Selected photo preview"
                       width={preview.width}
                       height={preview.height}

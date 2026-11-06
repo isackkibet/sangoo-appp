@@ -232,7 +232,7 @@ export async function listPosts(options: ListPostsOptions): Promise<FeedResponse
   }
 
   if (options.scope !== "user") {
-    where.push(VISIBILITY);
+    where.push(VISIBILITY.replace(/^\s*AND\s+/i, ""));
   }
 
   const order =
