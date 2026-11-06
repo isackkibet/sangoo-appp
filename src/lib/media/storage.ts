@@ -33,7 +33,9 @@ export function storageBucket(): string {
   return BUCKET;
 }
 
-export async function ensureMediaBucket(): Promise<string> {
+let bucketReady: Promise<string> | null = null;
+
+async function verifyMediaBucket(): Promise<string> {
   const supabase = createSupabaseAdminClient();
   const { data, error } = await supabase.storage.getBucket(BUCKET);
 
@@ -58,6 +60,16 @@ export async function ensureMediaBucket(): Promise<string> {
   }
 
   return BUCKET;
+}
+
+export function ensureMediaBucket(): Promise<string> {
+  if (!bucketReady) {
+    bucketReady = verifyMediaBucket().catch((error) => {
+      bucketReady = null;
+      throw error;
+    });
+  }
+  return bucketReady;
 }
 
 export interface UploadTarget {

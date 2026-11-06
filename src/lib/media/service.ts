@@ -32,6 +32,7 @@ import {
 } from "@/lib/media/validation";
 import { mediaAvatar, mediaFullName, mediaUsername } from "@/lib/media/user";
 import { removeMedia } from "@/lib/media/storage";
+import { invalidateMediaCache } from "@/lib/media/cache";
 
 type Row = Record<string, unknown>;
 
@@ -441,6 +442,7 @@ export async function createPost(
 
   const post = await getPost(postId, userId);
   if (!post) throw new Error("Could not load the new post.");
+  await invalidateMediaCache();
   return post;
 }
 
@@ -469,6 +471,7 @@ export async function deletePost(
   await syncHashtags(postId, captionRows[0]?.caption ?? "", -1);
   await sql.query("DELETE FROM media_posts WHERE id = $1", [postId]);
   await Promise.all(media.map((m) => removeMedia(m.storage_path)));
+  await invalidateMediaCache();
   return true;
 }
 
@@ -509,6 +512,7 @@ export async function toggleLike(
     [postId],
   )) as { count: number }[];
 
+  await invalidateMediaCache();
   return { liked: existing.length === 0, likeCount: Number(rows[0]?.count) || 0 };
 }
 
@@ -525,12 +529,14 @@ export async function toggleSave(
   )) as unknown[];
   if (existing.length > 0) {
     await sql.query("DELETE FROM media_saves WHERE post_id = $1 AND user_id = $2", [postId, userId]);
+    await invalidateMediaCache();
     return { saved: false };
   }
   await sql.query(
     "INSERT INTO media_saves (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
     [postId, userId],
   );
+  await invalidateMediaCache();
   return { saved: true };
 }
 
@@ -570,6 +576,7 @@ export async function toggleRepost(
     "SELECT COUNT(*)::int AS count FROM media_reposts WHERE post_id = $1",
     [postId],
   )) as { count: number }[];
+  await invalidateMediaCache();
   return { reposted: existing.length === 0, repostCount: Number(rows[0]?.count) || 0 };
 }
 
@@ -713,6 +720,7 @@ export async function addComment(
      WHERE c.id = $1`,
     [commentId],
   )) as Row[];
+  await invalidateMediaCache();
   return rowToComment(rows[0], userId);
 }
 
@@ -733,6 +741,7 @@ export async function deleteComment(
     throw new Error("You cannot delete this comment.");
   }
   await sql.query("DELETE FROM media_comments WHERE id = $1", [commentId]);
+  await invalidateMediaCache();
   return true;
 }
 
@@ -762,6 +771,7 @@ export async function toggleCommentLike(
     "SELECT COUNT(*)::int AS count FROM media_comment_likes WHERE comment_id = $1",
     [commentId],
   )) as { count: number }[];
+  await invalidateMediaCache();
   return { liked: existing.length === 0, likeCount: Number(rows[0]?.count) || 0 };
 }
 
@@ -916,6 +926,7 @@ export async function toggleFollow(
     [target.id],
   )) as { count: number }[];
 
+  await invalidateMediaCache();
   return {
     following: !existing[0] && !target.is_private,
     pending: !existing[0] && target.is_private,
@@ -952,6 +963,7 @@ export async function respondToFollowRequest(
       [requesterId, ownerId],
     );
   }
+  await invalidateMediaCache();
   return true;
 }
 
@@ -1116,6 +1128,7 @@ export async function updateProfile(
 
   const rows = (await sql.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [userId])) as UserRow[];
   const user = rowToUser(rows[0], userId);
+  await invalidateMediaCache();
   return { user, oldAvatar: current.avatar_url };
 }
 

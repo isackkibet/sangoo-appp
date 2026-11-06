@@ -119,6 +119,7 @@ export default function MediaCarousel({
                 alt={img.alt_text}
                 fill
                 sizes={sizes}
+                quality={90}
                 className={objectFit === 'cover' ? 'object-cover' : 'object-contain'}
                 priority={i === 0}
               />

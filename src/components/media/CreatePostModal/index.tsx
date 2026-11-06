@@ -22,13 +22,54 @@ type Preview = {
 
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
+const HIGH_QUALITY_IMAGE_MAX_SIDE = 2560;
+const DIRECT_IMAGE_TYPES = new Set([
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+]);
+
+function canvasToBlob(canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (result) => {
+        if (result) resolve(result);
+        else reject(new Error('Your browser could not process that photo.'));
+      },
+      type,
+      quality,
+    );
+  });
+}
 
 async function prepareImage(file: File): Promise<Preview> {
   const bitmap = await createImageBitmap(file);
-  const maxSide = 1440;
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const width = Math.max(1, Math.round(bitmap.width * scale));
-  const height = Math.max(1, Math.round(bitmap.height * scale));
+  const rawWidth = bitmap.width;
+  const rawHeight = bitmap.height;
+
+  // Keep the original upload when it is already an accepted format and size.
+  // This avoids re-compressing photos and keeps full detail/quality.
+  if (DIRECT_IMAGE_TYPES.has(file.type) && file.size <= MAX_IMAGE_BYTES) {
+    bitmap.close();
+    return {
+      file,
+      previewUrl: URL.createObjectURL(file),
+      width: rawWidth,
+      height: rawHeight,
+      kind: 'image',
+    };
+  }
+
+  if (file.type === 'image/gif') {
+    bitmap.close();
+    throw new Error('That GIF is too large. Choose one under 20 MB.');
+  }
+
+  const maxSide = HIGH_QUALITY_IMAGE_MAX_SIDE;
+  const scale = Math.min(1, maxSide / Math.max(rawWidth, rawHeight));
+  const width = Math.max(1, Math.round(rawWidth * scale));
+  const height = Math.max(1, Math.round(rawHeight * scale));
 
   const canvas = document.createElement('canvas');
   canvas.width = width;
@@ -36,23 +77,23 @@ async function prepareImage(file: File): Promise<Preview> {
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('Your browser could not process that photo.');
 
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
   ctx.drawImage(bitmap, 0, 0, width, height);
   bitmap.close();
 
-  const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (result) => {
-        if (result) resolve(result);
-        else reject(new Error('Your browser could not process that photo.'));
-      },
-      'image/jpeg',
-      0.85,
-    );
-  });
+  let blob = await canvasToBlob(canvas, 'image/webp', 0.92);
+  if (blob.type !== 'image/webp') {
+    blob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
+  }
+  const type = blob.type === 'image/webp' ? 'image/webp' : 'image/jpeg';
+  const extension = type === 'image/webp' ? '.webp' : '.jpg';
 
-  const uploadFile = new File([blob], file.name.replace(/\.[^.]+$/, '') + '.jpg', {
-    type: 'image/jpeg',
-  });
+  const uploadFile = new File(
+    [blob],
+    file.name.replace(/\.[^.]+$/, '') + extension,
+    { type },
+  );
 
   return {
     file: uploadFile,
@@ -305,7 +346,7 @@ export default function CreatePostModal() {
                 <input
                   ref={inputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
                   className="hidden"
                   onChange={e => void pickFile(e.target.files?.[0])}
                 />

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { cached } from "@/lib/cache";
 import {
   ApiError,
   handleError,
@@ -6,6 +7,7 @@ import {
   optionalMediaUser,
   requireMediaUser,
 } from "@/lib/media/api";
+import { mediaCacheVersion } from "@/lib/media/cache";
 import { listPosts, createPost, type NewMediaInput } from "@/lib/media/service";
 import {
   putMedia,
@@ -58,7 +60,7 @@ export async function GET(req: Request) {
       );
     }
 
-    const feed = await listPosts({
+    const options = {
       viewerId: user?.id ?? null,
       scope,
       category: url.searchParams.get("category") ?? undefined,
@@ -72,7 +74,11 @@ export async function GET(req: Request) {
         100000,
         0,
       ),
-    });
+    } as const;
+
+    const version = await mediaCacheVersion();
+    const cacheKey = `sihu:feed:${version}:${JSON.stringify(options)}`;
+    const feed = await cached(cacheKey, 10, () => listPosts(options));
 
     return NextResponse.json(feed, {
       headers: { "Cache-Control": "no-store" },

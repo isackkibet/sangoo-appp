@@ -262,13 +262,39 @@ const SCHEMA_STATEMENTS = [
 
 let schemaReady: Promise<void> | null = null;
 
+// Bump this when SCHEMA_STATEMENTS changes so the migration runs again.
+const SCHEMA_VERSION = 20261106;
+
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {
     schemaReady = (async () => {
       const sql = getSql();
+
+      // Fast path: the schema was already applied by an earlier process.
+      try {
+        const rows = (await sql.query(
+          "SELECT 1 FROM schema_meta WHERE version = $1 LIMIT 1",
+          [SCHEMA_VERSION],
+        )) as unknown[];
+        if (rows.length > 0) return;
+      } catch {
+        // schema_meta does not exist yet; run the full migration below.
+      }
+
       for (const statement of SCHEMA_STATEMENTS) {
         await sql.query(statement);
       }
+
+      await sql.query(
+        `CREATE TABLE IF NOT EXISTS schema_meta (
+           version INTEGER PRIMARY KEY,
+           applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+         )`,
+      );
+      await sql.query(
+        "INSERT INTO schema_meta (version) VALUES ($1) ON CONFLICT DO NOTHING",
+        [SCHEMA_VERSION],
+      );
     })().catch((error) => {
       schemaReady = null;
       throw error;

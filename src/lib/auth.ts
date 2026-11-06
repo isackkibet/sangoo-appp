@@ -7,6 +7,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { promisify } from "node:util";
+import { cacheDel, cacheGet, cacheSet } from "@/lib/cache";
 import { getSql, hasDatabase } from "@/lib/db";
 import { mediaUsername } from "@/lib/media/user";
 
@@ -195,6 +196,11 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     const token = store.get(SESSION_COOKIE)?.value;
     if (!token) return null;
 
+    const tokenHash = hashToken(token);
+    const cacheKey = `sihu:session:${tokenHash}`;
+    const cachedUser = await cacheGet<AuthUser>(cacheKey);
+    if (cachedUser) return cachedUser;
+
     const sql = getSql();
     const rows = (await sql.query(
       `SELECT u.*
@@ -202,11 +208,14 @@ export async function getSessionUser(): Promise<AuthUser | null> {
        JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = $1 AND s.expires_at > NOW()
        LIMIT 1`,
-      [hashToken(token)],
+      [tokenHash],
     )) as UserRow[];
 
     const row = rows[0];
-    return row ? publicUser(row) : null;
+    if (!row) return null;
+    const user = publicUser(row);
+    await cacheSet(cacheKey, user, 20);
+    return user;
   } catch (error) {
     console.error("Failed to read session:", error);
     return null;
@@ -223,6 +232,7 @@ export async function destroySession(): Promise<void> {
       await sql.query("DELETE FROM sessions WHERE token_hash = $1", [
         hashToken(token),
       ]);
+      await cacheDel(`sihu:session:${hashToken(token)}`);
     } catch (error) {
       console.error("Failed to delete session:", error);
     }
