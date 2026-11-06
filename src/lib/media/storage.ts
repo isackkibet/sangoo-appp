@@ -11,7 +11,7 @@ function normalizeBucketName(value: string | undefined): string {
 
 const BUCKET = normalizeBucketName(process.env.SUPABASE_STORAGE_BUCKET);
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
+const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY?.trim();
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
@@ -85,7 +85,7 @@ export async function createUploadTarget(
 ): Promise<UploadTarget> {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error(
-      "Media storage is not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.",
+      "Media storage is not configured. Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY.",
     );
   }
 
@@ -125,7 +125,7 @@ function resolveProvider(): StorageProvider {
     return "local";
   }
   throw new Error(
-    "Media storage is not configured. Set NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_STORAGE_BUCKET.",
+    "Media storage is not configured. Set NEXT_PUBLIC_SUPABASE_URL, SUPABASE_SECRET_KEY and SUPABASE_STORAGE_BUCKET.",
   );
 }
 

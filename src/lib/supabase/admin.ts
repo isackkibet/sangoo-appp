@@ -2,13 +2,15 @@ import { createClient } from "@supabase/supabase-js";
 
 export function createSupabaseAdminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const secretKey = process.env.SUPABASE_SECRET_KEY;
 
-  if (!url || !serviceRoleKey) {
-    throw new Error("NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required.");
+  if (!url || !secretKey) {
+    throw new Error(
+      "NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY are required."
+    );
   }
 
-  return createClient(url, serviceRoleKey, {
+  return createClient(url, secretKey, {
     auth: {
       autoRefreshToken: false,
       persistSession: false,

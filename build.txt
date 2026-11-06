@@ -1,0 +1,82 @@
+﻿Γû▓ Next.js 16.2.2 (Turbopack)
+- Environments: .env.local
+- Experiments (use with caution):
+  ┬╖ optimizePackageImports
+
+  Creating an optimized production build ...
+Γ£ô Compiled successfully in 32.6s
+  Running TypeScript ...
+  Finished TypeScript in 29.0s ...
+  Collecting page data using 7 workers ...
+  Generating static pages using 7 workers (0/32) ...
+  Generating static pages using 7 workers (8/32) 
+  Generating static pages using 7 workers (16/32) 
+  Generating static pages using 7 workers (24/32) 
+Γ£ô Generating static pages using 7 workers (32/32) in 4.8s
+  Finalizing page optimization ...
+
+Route (app)
+Γöî Γùï /
+Γö£ Γùï /_not-found
+Γö£ Γùï /admin
+Γö£ Γùï /admin/review
+Γö£ Γùï /ai
+Γö£ ╞Æ /api/ai/chat
+Γö£ ╞Æ /api/auth/config
+Γö£ ╞Æ /api/auth/google
+Γö£ ╞Æ /api/auth/google/callback
+Γö£ ╞Æ /api/auth/login
+Γö£ ╞Æ /api/auth/logout
+Γö£ ╞Æ /api/auth/me
+Γö£ ╞Æ /api/auth/signup
+Γö£ ╞Æ /api/keys
+Γö£ ╞Æ /api/media/comments/[id]
+Γö£ ╞Æ /api/media/comments/[id]/like
+Γö£ ╞Æ /api/media/images/[id]
+Γö£ ╞Æ /api/media/posts
+Γö£ ╞Æ /api/media/posts/[id]
+Γö£ ╞Æ /api/media/posts/[id]/comments
+Γö£ ╞Æ /api/media/posts/[id]/like
+Γö£ ╞Æ /api/media/posts/[id]/repost
+Γö£ ╞Æ /api/media/posts/[id]/save
+Γö£ ╞Æ /api/media/users/[username]
+Γö£ ╞Æ /api/media/users/[username]/follow
+Γö£ ╞Æ /api/media/users/[username]/followers
+Γö£ ╞Æ /api/media/users/[username]/following
+Γö£ ╞Æ /api/test-supabase
+Γö£ Γùï /dapp
+Γö£ Γùï /dapp/mine
+Γö£ Γùï /dapp/pools
+Γö£ Γùï /dapp/swap
+Γö£ Γùï /dapp/vaults
+Γö£ Γùï /login
+Γö£ ╞Æ /media
+Γö£ ╞Æ /media/create
+Γö£ ╞Æ /media/direct
+Γö£ ╞Æ /media/explore
+Γö£ ╞Æ /media/feed
+Γö£ ╞Æ /media/liked
+Γö£ ╞Æ /media/profile
+Γö£ ╞Æ /media/reels
+Γö£ ╞Æ /media/search
+Γö£ Γùï /play
+Γö£ Γùï /play/chess
+Γö£ Γùï /play/predictions
+Γö£ Γùï /portal
+Γö£ ΓùÅ /portal/article/[id]
+Γöé Γö£ /portal/article/circular-economy-water
+Γöé Γö£ /portal/article/access-to-information
+Γöé Γö£ /portal/article/blue-economy-potential
+Γöé Γöö [+3 more paths]
+Γö£ Γùï /portal/contributor
+Γö£ Γùï /portal/submit
+Γö£ Γùï /portal/submit/event
+Γö£ Γùï /portal/submit/podcast
+Γö£ Γùï /supabase-test
+Γöö Γùï /verify
+
+
+Γùï  (Static)   prerendered as static content
+ΓùÅ  (SSG)      prerendered as static HTML (uses generateStaticParams)
+╞Æ  (Dynamic)  server-rendered on demand
+
