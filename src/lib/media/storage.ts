@@ -11,7 +11,9 @@ function normalizeBucketName(value: string | undefined): string {
 
 const BUCKET = normalizeBucketName(process.env.SUPABASE_STORAGE_BUCKET);
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-const SUPABASE_KEY = process.env.SUPABASE_SECRET_KEY?.trim();
+const SUPABASE_KEY =
+  process.env.SUPABASE_SECRET_KEY?.trim() ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
 
 const ALLOWED_MIME_TYPES = [
   "image/jpeg",
