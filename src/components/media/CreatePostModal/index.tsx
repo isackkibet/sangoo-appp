@@ -11,7 +11,11 @@ import { useSihuAuth } from '@/components/auth/SihuAuth';
 import { MEDIA_CATEGORIES } from '@/lib/media/categories';
 import type { MediaPost } from '@/lib/media/mockData';
 
-import { prepareMedia, type PreparedMedia } from '@/lib/media/prepareUpload';
+import {
+  prepareMedia,
+  SERVER_UPLOAD_MAX_BYTES,
+  type PreparedMedia,
+} from '@/lib/media/prepareUpload';
 
 type Preview = PreparedMedia;
 
@@ -76,55 +80,78 @@ export default function CreatePostModal() {
     setError(null);
 
     try {
-      const signRes = await fetch('/api/media/uploads', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mime: preview.file.type, size: preview.file.size }),
-      });
-      const signed = (await signRes.json()) as {
-        path?: string;
-        signedUrl?: string;
-        error?: string;
-      };
+      let res: Response;
+      if (preview.file.size <= SERVER_UPLOAD_MAX_BYTES) {
+        const form = new FormData();
+        form.append('media', preview.file);
+        form.append('width', String(preview.width));
+        form.append('height', String(preview.height));
+        form.append('caption', caption);
+        form.append('category', category);
+        form.append('locationName', location);
+        form.append('altText', caption);
+        res = await fetch('/api/media/posts', {
+          method: 'POST',
+          body: form,
+        });
+      } else {
+        const signRes = await fetch('/api/media/uploads', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ mime: preview.file.type, size: preview.file.size }),
+        });
+        const signed = (await signRes.json()) as {
+          path?: string;
+          signedUrl?: string;
+          error?: string;
+        };
 
-      if (!signRes.ok || !signed.signedUrl || !signed.path) {
-        throw new Error(signed.error || 'Could not prepare the upload.');
+        if (!signRes.ok || !signed.signedUrl || !signed.path) {
+          throw new Error(signed.error || 'Could not prepare the upload.');
+        }
+
+        let uploadRes: Response;
+        try {
+          const form = new FormData();
+          form.append('cacheControl', '31536000');
+          form.append('', preview.file);
+          uploadRes = await fetch(signed.signedUrl, {
+            method: 'PUT',
+            headers: { 'x-upsert': 'false' },
+            body: form,
+          });
+        } catch {
+          throw new Error(
+            'Could not reach Supabase Storage. Check Storage CORS settings for your site, or choose a file under 4 MB.',
+          );
+        }
+
+        if (!uploadRes.ok) {
+          const detail = await uploadRes.text().catch(() => '');
+          throw new Error(`Upload failed (${uploadRes.status}). ${detail}`.trim());
+        }
+
+        res = await fetch('/api/media/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caption,
+            category,
+            locationName: location,
+            media: [
+              {
+                path: signed.path,
+                mime: preview.file.type,
+                kind: preview.kind,
+                width: preview.width,
+                height: preview.height,
+                durationMs: null,
+                altText: caption,
+              },
+            ],
+          }),
+        });
       }
-
-      const form = new FormData();
-      form.append('cacheControl', '31536000');
-      form.append('', preview.file);
-      const uploadRes = await fetch(signed.signedUrl, {
-        method: 'PUT',
-        headers: { 'x-upsert': 'false' },
-        body: form,
-      });
-
-      if (!uploadRes.ok) {
-        const detail = await uploadRes.text().catch(() => '');
-        throw new Error(`Upload failed (${uploadRes.status}). ${detail}`.trim());
-      }
-
-      const res = await fetch('/api/media/posts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          caption,
-          category,
-          locationName: location,
-          media: [
-            {
-              path: signed.path,
-              mime: preview.file.type,
-              kind: preview.kind,
-              width: preview.width,
-              height: preview.height,
-              durationMs: null,
-              altText: caption,
-            },
-          ],
-        }),
-      });
       const data = (await res.json()) as { post?: MediaPost; error?: string };
 
       if (!res.ok || !data.post) {

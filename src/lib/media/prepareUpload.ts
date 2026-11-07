@@ -9,6 +9,7 @@ export type PreparedMedia = {
   durationMs: number | null;
 };
 
+export const SERVER_UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 const HIGH_QUALITY_IMAGE_MAX_SIDE = 2560;
@@ -39,7 +40,7 @@ async function prepareImage(file: File): Promise<PreparedMedia> {
 
   // Keep the original upload when it is already an accepted format and size.
   // This avoids re-compressing photos and keeps full detail/quality.
-  if (DIRECT_IMAGE_TYPES.has(file.type) && file.size <= MAX_IMAGE_BYTES) {
+  if (DIRECT_IMAGE_TYPES.has(file.type) && file.size <= SERVER_UPLOAD_MAX_BYTES) {
     bitmap.close();
     return {
       file,
@@ -53,7 +54,14 @@ async function prepareImage(file: File): Promise<PreparedMedia> {
 
   if (file.type === "image/gif") {
     bitmap.close();
-    throw new Error("That GIF is too large. Choose one under 20 MB.");
+    return {
+      file,
+      previewUrl: URL.createObjectURL(file),
+      width: rawWidth,
+      height: rawHeight,
+      kind: "image",
+      durationMs: null,
+    };
   }
 
   const maxSide = HIGH_QUALITY_IMAGE_MAX_SIDE;
@@ -62,20 +70,37 @@ async function prepareImage(file: File): Promise<PreparedMedia> {
   const height = Math.max(1, Math.round(rawHeight * scale));
 
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Your browser could not process that photo.");
 
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, width, height);
-  bitmap.close();
-
-  let blob = await canvasToBlob(canvas, "image/webp", 0.92);
-  if (blob.type !== "image/webp") {
-    blob = await canvasToBlob(canvas, "image/jpeg", 0.92);
+  let blob: Blob | null = null;
+  let outputWidth = width;
+  let outputHeight = height;
+  let scale = 1;
+  try {
+    for (const quality of [0.92, 0.84, 0.76, 0.68, 0.6]) {
+      outputWidth = Math.max(1, Math.round(width * scale));
+      outputHeight = Math.max(1, Math.round(height * scale));
+      canvas.width = outputWidth;
+      canvas.height = outputHeight;
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(bitmap, 0, 0, outputWidth, outputHeight);
+      blob = await canvasToBlob(canvas, "image/webp", quality);
+      if (blob.type !== "image/webp") {
+        blob = await canvasToBlob(canvas, "image/jpeg", quality);
+      }
+      if (blob.size <= SERVER_UPLOAD_MAX_BYTES) break;
+      scale *= 0.82;
+    }
+  } finally {
+    bitmap.close();
   }
+
+  if (!blob || blob.size > SERVER_UPLOAD_MAX_BYTES) {
+    throw new Error("Could not reduce that photo enough to upload. Choose a smaller image.");
+  }
+
   const type = blob.type === "image/webp" ? "image/webp" : "image/jpeg";
   const extension = type === "image/webp" ? ".webp" : ".jpg";
 
@@ -88,8 +113,8 @@ async function prepareImage(file: File): Promise<PreparedMedia> {
   return {
     file: uploadFile,
     previewUrl: URL.createObjectURL(blob),
-    width,
-    height,
+    width: outputWidth,
+    height: outputHeight,
     kind: "image",
     durationMs: null,
   };
