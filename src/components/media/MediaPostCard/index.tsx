@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useState } from 'react';
 import {
   Heart, MessageCircle, Repeat2, Send, Bookmark,
-  MoreHorizontal, MapPin, BadgeCheck,
+  MoreHorizontal, MapPin, BadgeCheck, Trash2,
 } from 'lucide-react';
 import MediaCarousel from '@/components/media/MediaCarousel';
 import { usePostViewStore } from '@/store/media/modalStores';
@@ -40,6 +40,9 @@ export default function MediaPostCard({ post }: Props) {
   const real = Boolean(post.is_real);
   const toggleLike = useMediaFeedStore(s => s.toggleLike);
   const toggleRepost = useMediaFeedStore(s => s.toggleRepost);
+  const removePost = useMediaFeedStore(s => s.removePost);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [localLiked, setLocalLiked] = useState(post.is_liked);
   const [saved, setSaved] = useState(post.is_saved);
   const [localLikeCount, setLocalLikeCount] = useState(post.like_count);
@@ -68,6 +71,20 @@ export default function MediaPostCard({ post }: Props) {
     }
     setLocalReposted(v => !v);
     setLocalRepostCount(c => (localReposted ? c - 1 : c + 1));
+  };
+
+  const handleDelete = async () => {
+    setMenuOpen(false);
+    if (!window.confirm('Delete this post? The photo or video will be removed permanently.')) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await removePost(post.id);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not delete the post.');
+      setDeleting(false);
+    }
   };
 
   const openPost = () => openModal(post);
@@ -103,9 +120,32 @@ export default function MediaPostCard({ post }: Props) {
             </p>
           </div>
         </Link>
-        <button className="text-slate-400 p-1.5 rounded-full hover:bg-slate-100 transition-colors shrink-0">
-          <MoreHorizontal size={18} />
-        </button>
+        <div className="relative shrink-0">
+          <button
+            onClick={() => setMenuOpen(v => !v)}
+            disabled={deleting}
+            aria-label="Post options"
+            className="text-slate-400 p-1.5 rounded-full hover:bg-slate-100 transition-colors disabled:opacity-50"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+          {menuOpen && post.is_owner && (
+            <>
+              <div
+                className="fixed inset-0 z-10"
+                onClick={() => setMenuOpen(false)}
+              />
+              <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+                <button
+                  onClick={handleDelete}
+                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                >
+                  <Trash2 size={15} /> Delete post
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
       {/* Media — full bleed on mobile, rounded on sm+ */}

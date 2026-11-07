@@ -10,6 +10,7 @@ interface FeedState {
   error: string | null;
   load: (force?: boolean) => Promise<void>;
   prepend: (post: MediaPost) => void;
+  removePost: (postId: string) => Promise<void>;
   toggleLike: (post: MediaPost) => Promise<void>;
   toggleRepost: (post: MediaPost) => Promise<void>;
 }
@@ -45,6 +46,22 @@ export const useMediaFeedStore = create<FeedState>((set, get) => ({
     set(state => ({
       posts: [post, ...state.posts.filter(p => p.id !== post.id)],
     })),
+
+  removePost: async (postId) => {
+    const previous = get().posts;
+    set({ posts: previous.filter(p => p.id !== postId) });
+
+    try {
+      const res = await fetch(`/api/media/posts/${postId}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const data = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(data.error || 'Could not delete the post.');
+      }
+    } catch (error) {
+      set({ posts: previous });
+      throw error;
+    }
+  },
 
   toggleLike: async (post) => {
     const optimistic = !post.is_liked;

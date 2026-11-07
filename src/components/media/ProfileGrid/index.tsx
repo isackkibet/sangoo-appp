@@ -3,7 +3,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
-import { Grid3X3, Film, Bookmark, Repeat2, BadgeCheck, Settings, ImagePlus } from 'lucide-react';
+import { Grid3X3, Film, Bookmark, Repeat2, BadgeCheck, Settings, ImagePlus, Trash2 } from 'lucide-react';
 import { MEDIA_USER, MEDIA_POSTS, type MediaPost } from '@/lib/media/mockData';
 import { useSihuAuth } from '@/components/auth/SihuAuth';
 import { useMediaFeedStore } from '@/store/media/feedStore';
@@ -18,6 +18,22 @@ const TABS = [
 ];
 
 function PostGrid({ posts }: { posts: MediaPost[] }) {
+  const removePost = useMediaFeedStore(s => s.removePost);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  const handleDelete = async (postId: string) => {
+    if (!window.confirm('Delete this post? The photo or video will be removed permanently.')) {
+      return;
+    }
+    setDeletingId(postId);
+    try {
+      await removePost(postId);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not delete the post.');
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="grid grid-cols-3 gap-1 mt-1">
       {posts.map(p => {
@@ -26,32 +42,43 @@ function PostGrid({ posts }: { posts: MediaPost[] }) {
         if (!image && !video) return null;
 
         return (
-          <Link
+          <div
             key={p.id}
-            href="/media/feed"
             className="relative aspect-square bg-slate-900 overflow-hidden group"
           >
-            {image ? (
-              <Image
-                src={image.url}
-                alt={p.caption}
-                fill
-                sizes="(max-width: 768px) 33vw, 280px"
-                className="object-cover group-hover:brightness-75 transition-all"
-              />
-            ) : (
-              <>
-                <video
-                  src={video.url}
-                  muted
-                  playsInline
-                  preload="metadata"
-                  className="h-full w-full object-cover group-hover:brightness-75 transition-all"
+            <Link href="/media/feed" className="absolute inset-0 block">
+              {image ? (
+                <Image
+                  src={image.url}
+                  alt={p.caption}
+                  fill
+                  sizes="(max-width: 768px) 33vw, 280px"
+                  className="object-cover group-hover:brightness-75 transition-all"
                 />
-                <Film size={20} className="absolute top-2 right-2 text-white drop-shadow" />
-              </>
+              ) : (
+                <>
+                  <video
+                    src={video.url}
+                    muted
+                    playsInline
+                    preload="metadata"
+                    className="h-full w-full object-cover group-hover:brightness-75 transition-all"
+                  />
+                  <Film size={20} className="absolute top-2 right-2 text-white drop-shadow" />
+                </>
+              )}
+            </Link>
+            {p.is_owner && p.is_real && (
+              <button
+                onClick={() => handleDelete(p.id)}
+                disabled={deletingId === p.id}
+                aria-label="Delete post"
+                className="absolute bottom-1.5 right-1.5 z-10 w-8 h-8 rounded-full bg-black/60 hover:bg-red-600 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition-all disabled:opacity-50"
+              >
+                <Trash2 size={15} />
+              </button>
             )}
-          </Link>
+          </div>
         );
       })}
     </div>

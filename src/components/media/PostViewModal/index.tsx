@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import { useState } from 'react';
-import { X, Heart, MessageCircle, Repeat2, Send, Bookmark, MoreHorizontal, BadgeCheck, MapPin } from 'lucide-react';
+import { X, Heart, MessageCircle, Repeat2, Send, Bookmark, MoreHorizontal, BadgeCheck, MapPin, Trash2 } from 'lucide-react';
 import { usePostViewStore } from '@/store/media/modalStores';
 import { useMediaFeedStore } from '@/store/media/feedStore';
 import MediaCarousel from '@/components/media/MediaCarousel';
@@ -24,6 +24,9 @@ export default function PostViewModal() {
   );
   const toggleLike = useMediaFeedStore(s => s.toggleLike);
   const toggleRepost = useMediaFeedStore(s => s.toggleRepost);
+  const removePost = useMediaFeedStore(s => s.removePost);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [liked, setLiked] = useState(false);
   const [saved, setSaved] = useState(false);
   const [likeCount, setLikeCount] = useState(0);
@@ -53,6 +56,21 @@ export default function PostViewModal() {
       return;
     }
     setReposted(v => !v);
+  };
+
+  const handleDelete = async () => {
+    setMenuOpen(false);
+    if (!window.confirm('Delete this post? The photo or video will be removed permanently.')) {
+      return;
+    }
+    setDeleting(true);
+    try {
+      await removePost(current.id);
+      close();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Could not delete the post.');
+      setDeleting(false);
+    }
   };
 
   const handleComment = (text: string) => {
@@ -118,9 +136,32 @@ export default function PostViewModal() {
                 </p>
               )}
             </div>
-            <button className="text-slate-400 hover:text-slate-700 p-1">
-              <MoreHorizontal size={20} />
-            </button>
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                disabled={deleting}
+                aria-label="Post options"
+                className="text-slate-400 hover:text-slate-700 p-1 disabled:opacity-50"
+              >
+                <MoreHorizontal size={20} />
+              </button>
+              {menuOpen && current.is_owner && (
+                <>
+                  <div
+                    className="fixed inset-0 z-10"
+                    onClick={() => setMenuOpen(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-1 z-20 w-44 rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+                    <button
+                      onClick={handleDelete}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-left text-[13px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                    >
+                      <Trash2 size={15} /> Delete post
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
 
           {/* Caption + comments */}
