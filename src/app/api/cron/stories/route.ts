@@ -10,7 +10,8 @@ function authorized(req: Request): boolean {
   if (secret) {
     return req.headers.get("authorization") === `Bearer ${secret}`;
   }
-  if (req.headers.get("x-vercel-cron")) return true;
+  if (req.headers.get("x-vercel-cron-schedule")) return true;
+  if (req.headers.get("user-agent")?.startsWith("vercel-cron/")) return true;
   if (isAdmin(req)) return true;
   return process.env.NODE_ENV !== "production";
 }
