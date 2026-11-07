@@ -84,6 +84,7 @@ export interface UploadTarget {
 export async function createUploadTarget(
   userId: string,
   mime: string,
+  folder: "posts" | "stories" = "posts",
 ): Promise<UploadTarget> {
   if (!SUPABASE_URL || !SUPABASE_KEY) {
     throw new Error(
@@ -97,7 +98,8 @@ export async function createUploadTarget(
   const now = new Date();
   const year = String(now.getUTCFullYear());
   const month = String(now.getUTCMonth() + 1).padStart(2, "0");
-  const objectPath = `posts/${userId}/${year}/${month}/${randomUUID()}.${ext}`;
+  const prefix = folder === "stories" ? "stories" : "posts";
+  const objectPath = `${prefix}/${userId}/${year}/${month}/${randomUUID()}.${ext}`;
 
   const { data, error } = await supabase.storage
     .from(bucket)

@@ -1211,6 +1211,7 @@ export interface CreateStoryInput {
 export async function createStory(userId: string, input: CreateStoryInput): Promise<StoryItem> {
   const sql = getSql();
   const id = randomUUID();
+  const caption = sanitizeText(input.caption, MAX_CAPTION);
   const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   await sql.query(
     `INSERT INTO media_stories
@@ -1226,7 +1227,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
       input.width,
       input.height,
       input.durationMs,
-      sanitizeText(input.caption, MAX_CAPTION),
+      caption,
       expiresAt,
     ],
   );
@@ -1237,7 +1238,7 @@ export async function createStory(userId: string, input: CreateStoryInput): Prom
     width: input.width,
     height: input.height,
     duration_ms: input.durationMs,
-    caption: input.caption,
+    caption,
     created_at: new Date().toISOString(),
     expires_at: expiresAt,
     view_count: 0,
@@ -1417,13 +1418,22 @@ export async function deleteStory(
   return true;
 }
 
-export async function cleanupExpiredStories(): Promise<void> {
+let lastStoryCleanup = 0;
+
+export async function cleanupExpiredStories(options?: { throttleMs?: number }): Promise<void> {
+  const throttleMs = options?.throttleMs ?? 0;
+  if (throttleMs > 0 && Date.now() - lastStoryCleanup < throttleMs) return;
+  lastStoryCleanup = Date.now();
+
   const sql = getSql();
   const rows = (await sql.query(
-    "SELECT storage_path FROM media_stories WHERE expires_at < NOW() LIMIT 100",
+    `DELETE FROM media_stories
+     WHERE id IN (
+       SELECT id FROM media_stories WHERE expires_at < NOW() LIMIT 200
+     )
+     RETURNING storage_path`,
   )) as { storage_path: string | null }[];
   if (rows.length === 0) return;
-  await sql.query("DELETE FROM media_stories WHERE expires_at < NOW()");
   await Promise.all(rows.map((r) => removeMedia(r.storage_path)));
 }
 

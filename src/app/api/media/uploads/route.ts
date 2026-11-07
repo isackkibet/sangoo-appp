@@ -30,9 +30,11 @@ export async function POST(req: Request) {
     const body = (await req.json().catch(() => ({}))) as {
       mime?: unknown;
       size?: unknown;
+      folder?: unknown;
     };
     const mime = typeof body.mime === "string" ? body.mime.toLowerCase() : "";
     const size = Number(body.size);
+    const folder = body.folder === "stories" ? "stories" : "posts";
     const kind = mediaKindForMime(mime);
 
     if (!kind) {
@@ -53,7 +55,7 @@ export async function POST(req: Request) {
 
     let target;
     try {
-      target = await createUploadTarget(user.id, mime);
+      target = await createUploadTarget(user.id, mime, folder);
     } catch (error) {
       throw new ApiError(
         error instanceof Error ? error.message : "Could not prepare the upload.",
@@ -62,7 +64,7 @@ export async function POST(req: Request) {
     }
 
     return NextResponse.json(
-      { ...target, kind, maxBytes },
+      { ...target, kind, maxBytes, folder },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
