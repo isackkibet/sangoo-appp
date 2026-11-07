@@ -65,9 +65,9 @@ async function prepareImage(file: File): Promise<PreparedMedia> {
   }
 
   const maxSide = HIGH_QUALITY_IMAGE_MAX_SIDE;
-  const scale = Math.min(1, maxSide / Math.max(rawWidth, rawHeight));
-  const width = Math.max(1, Math.round(rawWidth * scale));
-  const height = Math.max(1, Math.round(rawHeight * scale));
+  const maxDimensionScale = Math.min(1, maxSide / Math.max(rawWidth, rawHeight));
+  const width = Math.max(1, Math.round(rawWidth * maxDimensionScale));
+  const height = Math.max(1, Math.round(rawHeight * maxDimensionScale));
 
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
