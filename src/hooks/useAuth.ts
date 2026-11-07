@@ -3,7 +3,7 @@
  * Provides authentication state and utilities
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { authService } from '@/services/auth/authService';
 
@@ -26,8 +26,13 @@ export function useAuth(): UseAuthReturn {
     if (typeof window !== 'undefined') {
       const isAuth = authService.isAdminAuthenticated();
       const userEmail = authService.getAdminEmail();
-      setIsAuthenticated(isAuth);
-      setEmail(userEmail);
+      const [isPending, startTransition] = useTransition();
+      if (!isPending) {
+        startTransition(() => {
+          setIsAuthenticated(isAuth);
+          setEmail(userEmail);
+        });
+      }
     }
   }, []);
 
