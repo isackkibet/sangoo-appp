@@ -23,9 +23,7 @@ export function mediaUsername(
 }
 
 export function mediaAvatar(
-  name?: string | null,
-  email?: string | null,
-  avatarUrl?: string | null,
+  name?: string | null,/
 ): string {
   if (avatarUrl && avatarUrl.trim()) return avatarUrl.trim();
   return avatarFallback(name, email);
