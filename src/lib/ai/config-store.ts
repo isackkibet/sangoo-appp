@@ -22,7 +22,7 @@ interface AIConfigUpdate {
 const defaultConfig: AIConfig = {
   activeProvider: "groq",
   models: {
-    groq: "llama-3.3-70b-versatile",
+    groq: "openai/gpt-oss-120b",
     openai: "gpt-4.1-mini",
     gemini: "gemini-1.5-flash",
     anthropic: "claude-3-5-sonnet-latest",
@@ -31,8 +31,25 @@ const defaultConfig: AIConfig = {
   updatedAt: null,
 };
 
+// Groq retired these model IDs. Keep the app working for configs saved before
+// the change instead of silently falling back to the retrieval-only answers.
+const LEGACY_GROQ_MODELS = new Set([
+  "llama-3.3-70b-versatile",
+  "llama3-70b-8192",
+  "llama3-8b-8192",
+  "mixtral-8x7b-32768",
+]);
+
 function isProvider(value: unknown): value is AIProvider {
   return typeof value === "string" && (AI_PROVIDERS as string[]).includes(value);
+}
+
+function normalizeModel(provider: AIProvider, value: unknown): string {
+  const model = typeof value === "string" ? value.trim() : "";
+  if (provider === "groq" && (!model || LEGACY_GROQ_MODELS.has(model))) {
+    return defaultConfig.models.groq;
+  }
+  return model || defaultConfig.models[provider];
 }
 
 // Vercel-friendly: keys can come from environment variables so the app works
@@ -64,10 +81,10 @@ function sanitizeConfig(raw: AIConfigUpdate | Partial<AIConfig> | null | undefin
       ? raw.activeProvider
       : defaultConfig.activeProvider,
     models: {
-      groq: raw?.models?.groq || defaultConfig.models.groq,
-      openai: raw?.models?.openai || defaultConfig.models.openai,
-      gemini: raw?.models?.gemini || defaultConfig.models.gemini,
-      anthropic: raw?.models?.anthropic || defaultConfig.models.anthropic,
+      groq: normalizeModel("groq", raw?.models?.groq),
+      openai: normalizeModel("openai", raw?.models?.openai),
+      gemini: normalizeModel("gemini", raw?.models?.gemini),
+      anthropic: normalizeModel("anthropic", raw?.models?.anthropic),
     },
     keys: {
       groq: raw?.keys?.groq || undefined,
@@ -95,10 +112,10 @@ function applyEnv(config: AIConfig): AIConfig {
   const merged: AIConfig = {
     ...config,
     models: {
-      groq: models.groq || config.models.groq,
-      openai: models.openai || config.models.openai,
-      gemini: models.gemini || config.models.gemini,
-      anthropic: models.anthropic || config.models.anthropic,
+      groq: normalizeModel("groq", models.groq || config.models.groq),
+      openai: normalizeModel("openai", models.openai || config.models.openai),
+      gemini: normalizeModel("gemini", models.gemini || config.models.gemini),
+      anthropic: normalizeModel("anthropic", models.anthropic || config.models.anthropic),
     },
     keys: {
       groq: config.keys.groq || keys.groq,

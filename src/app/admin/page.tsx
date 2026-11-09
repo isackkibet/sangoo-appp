@@ -20,7 +20,7 @@ export default function AdminDashboard() {
   const [openaiKey, setOpenaiKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
-  const [groqModel, setGroqModel] = useState("llama-3.3-70b-versatile");
+  const [groqModel, setGroqModel] = useState("openai/gpt-oss-120b");
   const [openaiModel, setOpenaiModel] = useState("gpt-4.1-mini");
   const [geminiModel, setGeminiModel] = useState("gemini-1.5-flash");
   const [anthropicModel, setAnthropicModel] = useState("claude-3-5-sonnet-latest");
@@ -606,7 +606,7 @@ export default function AdminDashboard() {
                   </div>
                   <div>
                     <p className="font-bold text-sm text-slate-800">Groq</p>
-                    <p className="text-[10px] text-slate-400">Llama 3.3, fast inference</p>
+                    <p className="text-[10px] text-slate-400">GPT-OSS, fast inference</p>
                   </div>
                   {activeProvider === "groq" && <span className="text-[9px] font-black uppercase tracking-widest text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">Active</span>}
                   {savedKeys.groq && <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">Saved</span>}
@@ -618,7 +618,7 @@ export default function AdminDashboard() {
                   type="text"
                   value={groqModel}
                   onChange={e => setGroqModel(e.target.value)}
-                  placeholder="llama-3.3-70b-versatile"
+                  placeholder="openai/gpt-oss-120b"
                   className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all"
                 />
                 <div className="relative">

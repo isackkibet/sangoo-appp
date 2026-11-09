@@ -222,7 +222,7 @@ function buildGreetingResponse(
 
   return {
     reply,
-    isStory: true,
+    isStory: false,
     followUpQuestions: [
       "Tell me the Sango origin story",
       "What is the Green Economy?",
