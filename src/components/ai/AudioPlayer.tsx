@@ -25,7 +25,7 @@ export default function AudioPlayer({ messageId, text, language, player, audioUr
       <button
         type="button"
         onClick={() => player.toggle(messageId, text, audioUrl)}
-        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-[var(--ai-muted)] transition-colors hover:bg-[var(--ai-surface-2)] hover:text-[var(--ai-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)] ${className}`}
+        className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-slate-600 transition-colors hover:bg-slate-100 hover:text-slate-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200 ${className}`}
         aria-label={t.listen}
       >
         <Volume2 size={14} aria-hidden="true" /> {t.listen}
@@ -34,17 +34,17 @@ export default function AudioPlayer({ messageId, text, language, player, audioUr
   }
 
   return (
-    <div className={`inline-flex items-center gap-2 rounded-full border border-[var(--ai-border)] bg-[var(--ai-surface)] px-2 py-1 ${className}`}>
-        <button
-          type="button"
-          onClick={() => player.toggle(messageId, text, audioUrl)}
-          className={`flex h-7 w-7 items-center justify-center rounded-full bg-[var(--ai-primary)] text-[var(--ai-on-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]`}
-          aria-label={player.status === "playing" ? t.pause : t.play}
-        >
-          {player.status === "playing" ? <Pause size={13} /> : <Play size={13} />}
+    <div className={`inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-2 py-1 ${className}`}>
+      <button
+        type="button"
+        onClick={() => player.toggle(messageId, text, audioUrl)}
+        className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        aria-label={player.status === "playing" ? t.pause : t.play}
+      >
+        {player.status === "playing" ? <Pause size={13} /> : <Play size={13} />}
       </button>
       <div
-        className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--ai-surface-2)] sm:w-28"
+        className="h-1.5 w-20 overflow-hidden rounded-full bg-slate-200 sm:w-28 dark:bg-slate-800"
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
@@ -52,7 +52,7 @@ export default function AudioPlayer({ messageId, text, language, player, audioUr
         aria-label={t.listen}
       >
         <div
-          className="h-full rounded-full bg-[var(--ai-primary)] transition-[width] duration-200"
+          className="h-full rounded-full bg-primary transition-[width] duration-200"
           style={{ width: `${Math.max(3, player.progress * 100)}%` }}
         />
       </div>
@@ -63,7 +63,7 @@ export default function AudioPlayer({ messageId, text, language, player, audioUr
         id={`rate-${messageId}`}
         value={player.rate}
         onChange={(event) => player.setRate(Number(event.target.value))}
-        className="rounded-md bg-transparent py-0.5 pl-1 pr-0.5 text-[11px] font-semibold text-[var(--ai-muted)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
+        className="rounded-md border border-slate-200 bg-transparent px-1.5 py-0.5 text-[11px] font-semibold text-slate-600 focus:outline-none focus:border-primary dark:border-slate-700 dark:text-slate-400"
       >
         {[0.75, 1, 1.25, 1.5].map((rate) => (
           <option key={rate} value={rate}>
@@ -74,7 +74,7 @@ export default function AudioPlayer({ messageId, text, language, player, audioUr
       <button
         type="button"
         onClick={player.stop}
-        className="flex h-7 w-7 items-center justify-center rounded-full text-[var(--ai-muted)] hover:bg-[var(--ai-surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
+        className="flex h-7 w-7 items-center justify-center rounded-full text-slate-600 hover:bg-slate-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-200"
         aria-label={t.stop}
       >
         <Square size={12} />
