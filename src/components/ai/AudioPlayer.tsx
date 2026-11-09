@@ -10,10 +10,11 @@ type Props = {
   text: string;
   language: Language;
   player: SpeechPlayer;
+  audioUrl?: string;
   className?: string;
 };
 
-export default function AudioPlayer({ messageId, text, language, player, className = "" }: Props) {
+export default function AudioPlayer({ messageId, text, language, player, audioUrl, className = "" }: Props) {
   const t = dictionary[language];
   if (!player.supported || !text) return null;
 
@@ -23,7 +24,7 @@ export default function AudioPlayer({ messageId, text, language, player, classNa
     return (
       <button
         type="button"
-        onClick={() => player.toggle(messageId, text)}
+        onClick={() => player.toggle(messageId, text, audioUrl)}
         className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[12px] font-semibold text-[var(--ai-muted)] transition-colors hover:bg-[var(--ai-surface-2)] hover:text-[var(--ai-text)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)] ${className}`}
         aria-label={t.listen}
       >
@@ -34,13 +35,13 @@ export default function AudioPlayer({ messageId, text, language, player, classNa
 
   return (
     <div className={`inline-flex items-center gap-2 rounded-full border border-[var(--ai-border)] bg-[var(--ai-surface)] px-2 py-1 ${className}`}>
-      <button
-        type="button"
-        onClick={() => player.toggle(messageId, text)}
-        className="flex h-7 w-7 items-center justify-center rounded-full bg-[var(--ai-primary)] text-[var(--ai-on-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
-        aria-label={player.status === "playing" ? t.pause : t.play}
-      >
-        {player.status === "playing" ? <Pause size={13} /> : <Play size={13} />}
+        <button
+          type="button"
+          onClick={() => player.toggle(messageId, text, audioUrl)}
+          className={`flex h-7 w-7 items-center justify-center rounded-full bg-[var(--ai-primary)] text-[var(--ai-on-primary)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]`}
+          aria-label={player.status === "playing" ? t.pause : t.play}
+        >
+          {player.status === "playing" ? <Pause size={13} /> : <Play size={13} />}
       </button>
       <div
         className="h-1.5 w-20 overflow-hidden rounded-full bg-[var(--ai-surface-2)] sm:w-28"

@@ -73,17 +73,17 @@ export default async function ArticlePage({ params }: PageProps) {
         </h1>
         <p className="text-[19px] md:text-[21px] text-slate-600 leading-relaxed mt-5">{article.excerpt}</p>
         <div className="flex flex-wrap items-center justify-between gap-4 mt-8 pt-6 border-t border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-sky-50 flex items-center justify-center text-sky-700 font-bold text-lg border border-sky-100">
-              {article.author.charAt(0)}
+            <div className="flex items-center gap-3">
+              <div className="w-11 h-11 rounded-full bg-sky-50 flex items-center justify-center text-sky-700 font-bold text-lg border border-sky-100">
+                {article.author.charAt(0)}
+              </div>
+              <div>
+                <div className="text-[15px] font-semibold text-slate-900">{article.author}</div>
+                <div className="text-[13px] text-slate-500">Sango Information Hub</div>
+              </div>
             </div>
-            <div>
-              <div className="text-[15px] font-semibold text-slate-900">{article.author}</div>
-              <div className="text-[13px] text-slate-500">Sango Information Hub</div>
-            </div>
+            <ArticleActions title={article.title} text={article.content} />
           </div>
-          <ArticleActions title={article.title} text={article.content} />
-        </div>
       </header>
 
       {/* Picture */}
