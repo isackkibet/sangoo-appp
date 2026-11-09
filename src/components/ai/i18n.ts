@@ -30,6 +30,14 @@ type Dictionary = {
   searching: string;
   finding: string;
   preparing: string;
+  searchingSiHU: string;
+  checkingWeb: string;
+  comparingEvidence: string;
+  preparingAnswer: string;
+  insufficientEvidence: string;
+  sihuInformation: string;
+  externalWebInformation: string;
+  combinedEvidence: string;
   sources: string;
   related: string;
   viewSources: string;
@@ -110,6 +118,14 @@ export const dictionary: Record<Language, Dictionary> = {
     searching: "Searching SIHU knowledge",
     finding: "Finding relevant articles",
     preparing: "Preparing your answer",
+    searchingSiHU: "Searching SIHU...",
+    checkingWeb: "Checking external sources...",
+    comparingEvidence: "Comparing available evidence...",
+    preparingAnswer: "Preparing grounded answer...",
+    insufficientEvidence: "I couldn't find enough reliable evidence to answer this question accurately.",
+    sihuInformation: "SIHU information",
+    externalWebInformation: "External web information",
+    combinedEvidence: "Combined evidence",
     sources: "Sources",
     related: "Related content",
     viewSources: "View sources",
@@ -188,6 +204,14 @@ export const dictionary: Record<Language, Dictionary> = {
     searching: "Inatafuta maarifa ya SIHU",
     finding: "Inatafuta makala husika",
     preparing: "Inaandaa jibu lako",
+    searchingSiHU: "Inatafuta SIHU...",
+    checkingWeb: "Inachanganya vyanzo vya nje...",
+    comparingEvidence: "Inalinganisha haki zilizopatikana...",
+    preparingAnswer: "Inaandaa jibu iliyotumikia...",
+    insufficientEvidence: "Sitaki kutafuta maelezo ya ajili ya maswali hili kwa kutumia zana ambazo hawiwezi kuthibitishwa.",
+    sihuInformation: "Maarifa ya SIHU",
+    externalWebInformation: "Maarifa kutoka vyanzo vya nje",
+    combinedEvidence: "Haki zilichanganyika",
     sources: "Vyanzo",
     related: "Maudhui husika",
     viewSources: "Tazama vyanzo",

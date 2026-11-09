@@ -38,6 +38,11 @@ export interface ChatMessageData {
   createdAt: number;
   speechText?: string;
   sourceIds?: string[];
+  sihuSources?: SourceItem[];
+  webSources?: SourceItem[];
+  evidenceLevel?: "sihu" | "web" | "combined" | "insufficient";
+  searchUsed?: boolean;
+  queriesUsed?: number;
   error?: boolean;
   animate?: boolean;
 }

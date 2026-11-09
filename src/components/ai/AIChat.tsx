@@ -2,10 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Circle, Loader2, Sparkles, Waves } from "lucide-react";
-import type { Article } from "@/constants/articles";
 import type { ChatMessageData, ContentItem, Language } from "./types";
 import { dictionary } from "./i18n";
-import { resolveSources } from "./resolve";
 import ChatMessage from "./ChatMessage";
 import SuggestedPrompts from "./SuggestedPrompts";
 import type { SpeechPlayer } from "./useSpeechPlayer";
@@ -14,7 +12,6 @@ type Props = {
   messages: ChatMessageData[];
   language: Language;
   thinking: boolean;
-  articles: Article[];
   related: ContentItem[];
   player: SpeechPlayer;
   onSuggestion: (prompt: string) => void;
@@ -76,7 +73,6 @@ export default function AIChat({
   messages,
   language,
   thinking,
-  articles,
   related,
   player,
   onSuggestion,
@@ -117,7 +113,7 @@ export default function AIChat({
     element.scrollTo({ top: element.scrollHeight, behavior: "smooth" });
   }, [messages.length, thinking]);
 
-  const steps = useMemo(() => [t.searching, t.finding, t.preparing], [t]);
+  const steps = useMemo(() => [t.searchingSiHU, t.checkingWeb, t.comparingEvidence, t.preparingAnswer], [t]);
   const lastAssistantId = useMemo(() => {
     for (let index = messages.length - 1; index >= 0; index -= 1) {
       const message = messages[index];
@@ -157,14 +153,14 @@ export default function AIChat({
     <div ref={scrollRef} className="ai-scroll flex-1 overflow-y-auto overflow-x-hidden">
       <div ref={contentRef} className="mx-auto w-full max-w-3xl space-y-6 px-3 py-5 md:px-6 md:py-6">
         {messages.map((message) => {
-          const sources = resolveSources(message.sourceIds, articles);
           return (
             <ChatMessage
               key={message.id}
               message={message}
               language={language}
               player={player}
-              sources={sources}
+              sihuSources={message.sihuSources}
+              webSources={message.webSources}
               related={message.id === lastAssistantId ? related : []}
               onFollowUp={onFollowUp}
             />

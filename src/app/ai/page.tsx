@@ -6,7 +6,7 @@ import type { Article, Podcast } from "@/constants/articles";
 import { articleService } from "@/services/articleService";
 import { podcastService } from "@/services/podcastService";
 import { kaiMedia, kaiPodcasts, type MediaItem } from "@/services/kaiHubService";
-import type { ChatMessageData, Conversation, Language, ProviderStatus, ThemeMode } from "@/components/ai/types";
+import type { ChatMessageData, Conversation, Language, ProviderStatus, SourceItem, ThemeMode } from "@/components/ai/types";
 import { dictionary } from "@/components/ai/i18n";
 import { buildRelatedContent, resolveSources, sourceArticleIds } from "@/components/ai/resolve";
 import { useSpeechPlayer } from "@/components/ai/useSpeechPlayer";
@@ -30,6 +30,11 @@ type ChatResponse = {
   speechText?: string;
   isStory?: boolean;
   sources?: string[];
+  sihuSources?: SourceItem[];
+  webSources?: SourceItem[];
+  evidenceLevel?: "sihu" | "web" | "combined" | "insufficient";
+  searchUsed?: boolean;
+  queriesUsed?: number;
 };
 
 function makeId() {
@@ -357,6 +362,11 @@ export default function AIAssistantPage() {
           sourceIds: Array.isArray(data.sources)
             ? data.sources.filter((source): source is string => typeof source === "string")
             : [],
+          sihuSources: Array.isArray(data.sihuSources) ? data.sihuSources : [],
+          webSources: Array.isArray(data.webSources) ? data.webSources : [],
+          evidenceLevel: data.evidenceLevel,
+          searchUsed: data.searchUsed,
+          queriesUsed: data.queriesUsed,
           animate: true,
         };
 
@@ -444,7 +454,6 @@ export default function AIAssistantPage() {
             messages={messages}
             language={language}
             thinking={thinking}
-            articles={articles}
             related={related}
             player={player}
             onSuggestion={sendMessage}

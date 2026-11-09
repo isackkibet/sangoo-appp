@@ -12,12 +12,13 @@ type Props = {
   message: ChatMessageData;
   language: Language;
   player: SpeechPlayer;
-  sources: SourceItem[];
+  sihuSources?: SourceItem[];
+  webSources?: SourceItem[];
   related: ContentItem[];
   onFollowUp: () => void;
 };
 
-export default function ChatMessage({ message, language, player, sources, related, onFollowUp }: Props) {
+export default function ChatMessage({ message, language, player, related, onFollowUp }: Props) {
   const t = dictionary[language];
   const mine = message.role === "user";
   const [reduceMotion] = useState(
@@ -48,8 +49,13 @@ export default function ChatMessage({ message, language, player, sources, relate
     [message.createdAt]
   );
 
+  const combinedSources = useMemo(
+    () => [...(message.sihuSources ?? []), ...(message.webSources ?? [])],
+    [message.sihuSources, message.webSources]
+  );
+
   const handleCitation = (index: number) => {
-    const source = sources[index];
+    const source = combinedSources[index];
     if (!source?.url) return;
     if (source.url.startsWith("/")) {
       window.location.href = source.url;
@@ -92,7 +98,7 @@ export default function ChatMessage({ message, language, player, sources, relate
           }`}
         >
           <div className="break-words">
-            <Markdown text={shown} sources={sources} onCitation={handleCitation} />
+            <Markdown text={shown} sources={combinedSources} onCitation={handleCitation} />
             {streaming && (
               <span className="ml-0.5 inline-block h-4 w-[2px] translate-y-[2px] animate-pulse bg-[var(--ai-primary)]" aria-hidden="true" />
             )}
@@ -105,7 +111,8 @@ export default function ChatMessage({ message, language, player, sources, relate
             text={message.speechText || message.content}
             language={language}
             player={player}
-            sources={sources}
+            sihuSources={message.sihuSources}
+            webSources={message.webSources}
             related={related}
             onFollowUp={onFollowUp}
           />
