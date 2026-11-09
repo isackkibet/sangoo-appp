@@ -112,13 +112,17 @@ ALTER TABLE chat_history ENABLE ROW LEVEL SECURITY;
 -- AI gateway settings (single shared config row)
 CREATE TABLE IF NOT EXISTS ai_gateway_settings (
   id TEXT PRIMARY KEY,
-  active_provider TEXT NOT NULL DEFAULT 'openai',
+  active_provider TEXT NOT NULL DEFAULT 'groq',
   models_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  groq_key_encrypted TEXT,
   openai_key_encrypted TEXT,
   gemini_key_encrypted TEXT,
   anthropic_key_encrypted TEXT,
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Existing installs: add the Groq column without dropping data.
+ALTER TABLE ai_gateway_settings ADD COLUMN IF NOT EXISTS groq_key_encrypted TEXT;
 
 ALTER TABLE ai_gateway_settings ENABLE ROW LEVEL SECURITY;
 

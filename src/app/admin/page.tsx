@@ -9,22 +9,24 @@ import { podcastService } from "@/services/podcastService";
 import { eventService } from "@/services/eventService";
 
 type TickerItem = { id: string; text: string };
-type AIProvider = "openai" | "gemini" | "anthropic";
+type AIProvider = "groq" | "openai" | "gemini" | "anthropic";
 
 export default function AdminDashboard() {
   const [activeTab, setActiveTab] = useState<'article' | 'podcast' | 'event' | 'ticker'>('article');
 
   // ==== AI API GATEWAY ====
-  const [activeProvider, setActiveProvider] = useState<AIProvider>("openai");
+  const [activeProvider, setActiveProvider] = useState<AIProvider>("groq");
+  const [groqKey, setGroqKey] = useState("");
   const [openaiKey, setOpenaiKey] = useState("");
   const [geminiKey, setGeminiKey] = useState("");
   const [anthropicKey, setAnthropicKey] = useState("");
+  const [groqModel, setGroqModel] = useState("llama-3.3-70b-versatile");
   const [openaiModel, setOpenaiModel] = useState("gpt-4.1-mini");
   const [geminiModel, setGeminiModel] = useState("gemini-1.5-flash");
   const [anthropicModel, setAnthropicModel] = useState("claude-3-5-sonnet-latest");
   const [apiSaving, setApiSaving] = useState(false);
-  const [savedKeys, setSavedKeys] = useState<{ openai: boolean; gemini: boolean; anthropic: boolean }>({ openai: false, gemini: false, anthropic: false });
-  const [maskedKeys, setMaskedKeys] = useState<{ openai: string | null; gemini: string | null; anthropic: string | null }>({ openai: null, gemini: null, anthropic: null });
+  const [savedKeys, setSavedKeys] = useState<{ groq: boolean; openai: boolean; gemini: boolean; anthropic: boolean }>({ groq: false, openai: false, gemini: false, anthropic: false });
+  const [maskedKeys, setMaskedKeys] = useState<{ groq: string | null; openai: string | null; gemini: string | null; anthropic: string | null }>({ groq: null, openai: null, gemini: null, anthropic: null });
   
   // States for Article
   const [articleTitle, setArticleTitle] = useState("");
@@ -90,11 +92,13 @@ export default function AdminDashboard() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'x-admin-key': adminKey },
         body: JSON.stringify({
+          groq: groqKey,
           openai: openaiKey,
           gemini: geminiKey,
           anthropic: anthropicKey,
           activeProvider,
           models: {
+            groq: groqModel,
             openai: openaiModel,
             gemini: geminiModel,
             anthropic: anthropicModel,
@@ -109,11 +113,12 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error('Failed to save keys');
       try { sessionStorage.setItem('sihu_admin_key', adminKey); } catch { /* ignore */ }
       setSavedKeys({
+        groq: savedKeys.groq || !!groqKey,
         openai: savedKeys.openai || !!openaiKey,
         gemini: savedKeys.gemini || !!geminiKey,
         anthropic: savedKeys.anthropic || !!anthropicKey
       });
-      setOpenaiKey(""); setGeminiKey(""); setAnthropicKey("");
+      setGroqKey(""); setOpenaiKey(""); setGeminiKey(""); setAnthropicKey("");
       await loadGatewayConfig();
       showToast("AI gateway settings saved!");
     } catch {
@@ -131,14 +136,16 @@ export default function AdminDashboard() {
         activeProvider: AIProvider;
         models: Record<AIProvider, string>;
         configured: Record<AIProvider, boolean>;
-        maskedKeys: { openai: string | null; gemini: string | null; anthropic: string | null };
+        maskedKeys: { groq: string | null; openai: string | null; gemini: string | null; anthropic: string | null };
       };
 
       setActiveProvider(data.activeProvider);
+      setGroqModel(data.models.groq);
       setOpenaiModel(data.models.openai);
       setGeminiModel(data.models.gemini);
       setAnthropicModel(data.models.anthropic);
       setSavedKeys({
+        groq: data.configured.groq,
         openai: data.configured.openai,
         gemini: data.configured.gemini,
         anthropic: data.configured.anthropic,
@@ -589,7 +596,44 @@ export default function AdminDashboard() {
           </div>
 
           <form onSubmit={handleSaveApiKeys} className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="grid grid-cols-1 md:grid-cols-3 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 divide-y md:divide-y-0 md:divide-x divide-slate-100">
+
+              {/* Groq */}
+              <div className="p-6 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-100 flex items-center justify-center">
+                    <svg className="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-slate-800">Groq</p>
+                    <p className="text-[10px] text-slate-400">Llama 3.3, fast inference</p>
+                  </div>
+                  {activeProvider === "groq" && <span className="text-[9px] font-black uppercase tracking-widest text-violet-700 bg-violet-50 px-2 py-0.5 rounded-full border border-violet-100">Active</span>}
+                  {savedKeys.groq && <span className="ml-auto text-[9px] font-black uppercase tracking-widest text-orange-600 bg-orange-50 px-2 py-0.5 rounded-full border border-orange-100">Saved</span>}
+                </div>
+                <button type="button" onClick={() => setActiveProvider("groq")} className={`w-full rounded-xl border px-3 py-2 text-xs font-bold uppercase tracking-wider transition-colors ${activeProvider === "groq" ? "border-violet-300 bg-violet-50 text-violet-700" : "border-slate-200 bg-slate-50 text-slate-500 hover:bg-slate-100"}`}>
+                  Use Groq in Agent SIHU
+                </button>
+                <input
+                  type="text"
+                  value={groqModel}
+                  onChange={e => setGroqModel(e.target.value)}
+                  placeholder="llama-3.3-70b-versatile"
+                  className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-white text-sm outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all"
+                />
+                <div className="relative">
+                  <input
+                    id="admin-groq-key"
+                    type="password"
+                    value={groqKey}
+                    onChange={e => setGroqKey(e.target.value)}
+                    placeholder="gsk_..."
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-sm font-mono outline-none focus:ring-2 focus:ring-orange-400 focus:border-orange-400 transition-all pr-10"
+                  />
+                  <svg className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" /></svg>
+                </div>
+                {maskedKeys.groq && <p className="text-[11px] text-slate-500">Stored: {maskedKeys.groq}</p>}
+              </div>
 
               {/* OpenAI */}
               <div className="p-6 space-y-4">
@@ -711,7 +755,7 @@ export default function AdminDashboard() {
               </p>
               <button
                 type="submit"
-                disabled={apiSaving || (!openaiKey && !geminiKey && !anthropicKey)}
+                disabled={apiSaving || (!groqKey && !openaiKey && !geminiKey && !anthropicKey)}
                 className="flex items-center gap-2 px-6 py-2.5 rounded-xl font-bold text-sm bg-gradient-to-r from-violet-600 to-indigo-600 text-white shadow-md hover:shadow-violet-200 hover:scale-105 transition-all disabled:opacity-40 disabled:cursor-not-allowed disabled:scale-100"
               >
                 {apiSaving ? (

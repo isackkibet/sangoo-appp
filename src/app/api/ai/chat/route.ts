@@ -39,7 +39,7 @@ function buildFallbackReply(message: string) {
   }
 
   if (lower.includes("agent") || lower.includes("sihu")) {
-    return "Agent SIHU is ready for a provider upgrade. Add an OpenAI, Gemini, or Claude key in the admin dashboard and this interface will start using the configured provider.";
+    return "Agent SIHU is ready for a provider upgrade. Add a Groq, OpenAI, Gemini, or Claude key in the admin dashboard and this interface will start using the configured provider.";
   }
 
   return "AI provider access is not configured yet. Add a provider key in the admin dashboard to enable boosted answers, or continue using the built-in retrieval-first SIHU Agent.";
@@ -100,8 +100,10 @@ export async function POST(req: NextRequest) {
       message?: string;
       sessionId?: string;
       history?: ChatTurn[];
+      language?: string;
     };
 
+    const language = body.language === "sw" ? "sw" : "en";
     const message = typeof body.message === "string" ? body.message.trim() : "";
     if (!message) {
       return NextResponse.json({ error: "Message is required." }, { status: 400 });
@@ -145,23 +147,45 @@ export async function POST(req: NextRequest) {
     const storyContext = agentResult.isStory
       ? `\n\nSTORYTELLER MODE: The user is requesting a story. Use narrative techniques, vivid imagery, and engage the senses. Draw from Lake Victoria Basin themes: forests, rivers, communities, Sango blockchain, stewardship, basin health mining.`
       : "";
+    const languageInstruction =
+      language === "sw"
+        ? "\n\nLANGUAGE: Answer in clear, natural Kiswahili. Keep place names, people's names and source titles in their original form."
+        : "\n\nLANGUAGE: Answer in clear, natural English. Keep place names, people's names and source titles in their original form.";
 
-    const reply = await chatWithProvider({
-      provider,
-      apiKey,
-      model,
-      messages: [
-        {
-          role: "system",
-          content: `${SYSTEM_PROMPT}${storyContext}\n\nUse this retrieval-first SIHU context if it is relevant:\n${agentResult.reply || "No retrieval context returned."}`,
-        },
-        ...history.map((item) => ({
-          role: item.role,
-          content: item.content,
-        })),
-        { role: "user", content: message },
-      ],
-    });
+    let reply: string;
+    try {
+      reply = await chatWithProvider({
+        provider,
+        apiKey,
+        model,
+        messages: [
+          {
+            role: "system",
+            content: `${SYSTEM_PROMPT}${storyContext}${languageInstruction}\n\nUse this retrieval-first SIHU context if it is relevant:\n${agentResult.reply || "No retrieval context returned."}`,
+          },
+          ...history.map((item) => ({
+            role: item.role,
+            content: item.content,
+          })),
+          { role: "user", content: message },
+        ],
+      });
+    } catch (providerError) {
+      // A provider outage should never break the chat: fall back to the
+      // retrieval-first SIHU agent answer.
+      console.error(`AI provider "${provider}" failed, using agent fallback:`, providerError);
+      return NextResponse.json({
+        reply: agentResult.reply || buildFallbackReply(message),
+        provider,
+        model,
+        intent: agentResult.intent,
+        sources: agentResult.sources,
+        mode: "fallback",
+        isStory: agentResult.isStory,
+        storyId: agentResult.storyId,
+        speechText: agentResult.speechText,
+      });
+    }
 
     // Generate speech-friendly text and detect if this is a story
     const speechText = getSpeechFriendlyText(reply);

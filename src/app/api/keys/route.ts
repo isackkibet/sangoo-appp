@@ -9,12 +9,14 @@ export async function POST(req: NextRequest) {
   if (!isAdmin(req)) return NextResponse.json({ success: false, message: "Only SIHU admins can change these settings." }, { status: 401 });
   try {
     const body = await req.json();
-    const { openai, gemini, anthropic, activeProvider, models } = body as {
+    const { groq, openai, gemini, anthropic, activeProvider, models } = body as {
+      groq?: string;
       openai?: string;
       gemini?: string;
       anthropic?: string;
-      activeProvider?: "openai" | "gemini" | "anthropic";
+      activeProvider?: "groq" | "openai" | "gemini" | "anthropic";
       models?: {
+        groq?: string;
         openai?: string;
         gemini?: string;
         anthropic?: string;
@@ -25,6 +27,7 @@ export async function POST(req: NextRequest) {
       activeProvider,
       models,
       keys: {
+        groq: groq || undefined,
         openai: openai || undefined,
         gemini: gemini || undefined,
         anthropic: anthropic || undefined,

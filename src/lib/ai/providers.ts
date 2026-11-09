@@ -13,6 +13,10 @@ export async function chatWithProvider(params: {
 }) {
   const { provider, apiKey, model, messages } = params;
 
+  if (provider === "groq") {
+    return chatWithGroq(apiKey, model, messages);
+  }
+
   if (provider === "openai") {
     return chatWithOpenAI(apiKey, model, messages);
   }
@@ -22,6 +26,33 @@ export async function chatWithProvider(params: {
   }
 
   return chatWithAnthropic(apiKey, model, messages);
+}
+
+async function chatWithGroq(apiKey: string, model: string, messages: ChatMessage[]) {
+  const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      temperature: 0.7,
+      max_tokens: 1024,
+    }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.text().catch(() => "");
+    throw new Error(`Groq request failed: ${response.status}${detail ? ` - ${detail.slice(0, 300)}` : ""}`);
+  }
+
+  const data = (await response.json()) as {
+    choices?: Array<{ message?: { content?: string } }>;
+  };
+
+  return data.choices?.[0]?.message?.content?.trim() || "No response returned from Groq.";
 }
 
 async function chatWithOpenAI(apiKey: string, model: string, messages: ChatMessage[]) {

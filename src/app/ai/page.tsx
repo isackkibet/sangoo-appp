@@ -1,121 +1,185 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
-import NewsHeader from "@/components/portal/NewsHeader";
-import {
-  Bot, Send, Mic, MicOff, Paperclip, X, Volume2, VolumeX, Square, BookOpen, Activity, Gift, Newspaper,
-  Search, Waves, Gavel, Plus, PanelLeft, Sparkles, User,
-} from "lucide-react";
-import type { LucideIcon } from "@/types/icon";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { X } from "lucide-react";
+import type { Article, Podcast } from "@/constants/articles";
+import { articleService } from "@/services/articleService";
+import { podcastService } from "@/services/podcastService";
+import { kaiMedia, kaiPodcasts, type MediaItem } from "@/services/kaiHubService";
+import type { ChatMessageData, Conversation, Language, ProviderStatus, ThemeMode } from "@/components/ai/types";
+import { dictionary } from "@/components/ai/i18n";
+import { buildRelatedContent, resolveSources, sourceArticleIds } from "@/components/ai/resolve";
+import { useSpeechPlayer } from "@/components/ai/useSpeechPlayer";
+import AIHeader from "@/components/ai/AIHeader";
+import AISidebar from "@/components/ai/AISidebar";
+import AIChat from "@/components/ai/AIChat";
+import ChatInput from "@/components/ai/ChatInput";
+import RelatedContent from "@/components/ai/RelatedContent";
 
-// Mobile detection hook
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
-  useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768 || /iPhone|iPad|iPod|Android/i.test(navigator.userAgent));
-    check();
-    window.addEventListener("resize", check);
-    return () => window.removeEventListener("resize", check);
-  }, []);
-  return isMobile;
-}
+const CONVERSATIONS_KEY = "sihu_ai_conversations_v1";
+const LANGUAGE_KEY = "sihu_ai_language";
+const THEME_KEY = "sihu_ai_theme";
+const MAX_CONVERSATIONS = 30;
 
-interface Message {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  timestamp: Date;
-  attachments?: File[];
+type ChatResponse = {
+  reply?: string;
+  provider?: string;
+  model?: string;
+  mode?: string;
+  error?: string;
   speechText?: string;
   isStory?: boolean;
+  sources?: string[];
+};
+
+function makeId() {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-interface ProviderStatus {
-  configured: Record<string, boolean>;
-  models: Record<string, string>;
-  activeProvider: string;
+function readConversations(): Conversation[] {
+  try {
+    const raw = window.localStorage.getItem(CONVERSATIONS_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return (parsed as Conversation[])
+      .filter(
+        (item) =>
+          item &&
+          typeof item.id === "string" &&
+          typeof item.sessionId === "string" &&
+          typeof item.title === "string" &&
+          Array.isArray(item.messages)
+      )
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, MAX_CONVERSATIONS);
+  } catch {
+    return [];
+  }
 }
 
-interface Tool {
-  id: string;
-  name: string;
-  icon: string;
-  enabled: boolean;
+function dedupePodcasts(items: Array<Podcast & { url?: string }>): Array<Podcast & { url?: string }> {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (!item || seen.has(item.id)) return false;
+    seen.add(item.id);
+    return true;
+  });
 }
 
-
-/** Renders a reply as text with **bold** parts; never as raw HTML. */
-function RichText({ text }: { text: string }) {
-  return (
-    <>
-      {text.split(/(\*\*[^*]+\*\*)/g).map((part, i) =>
-        /^\*\*[^*]+\*\*$/.test(part) ? <strong key={i}>{part.slice(2, -2)}</strong> : <React.Fragment key={i}>{part}</React.Fragment>
-      )}
-    </>
-  );
-}
-
-const TOOL_ICON: Record<string, LucideIcon> = { search: Search, auto_stories: BookOpen, water: Waves, gavel: Gavel };
-
-const SUGGESTIONS: { Icon: LucideIcon; title: string; prompt: string }[] = [
-  { Icon: BookOpen, title: "Tell me a Sango story", prompt: "Tell me a story about Sango and the Lake Victoria Basin" },
-  { Icon: Activity, title: "How healthy is the basin?", prompt: "What is basin health mining and how is the lake doing?" },
-  { Icon: Gift, title: "How do I earn rewards?", prompt: "How can I earn SIHU rewards for stewardship work?" },
-  { Icon: Newspaper, title: "Latest news", prompt: "What are the latest news and updates from SIHU?" },
-];
-
-export default function AgentSihuPage() {
+export default function AIAssistantPage() {
   const [mounted, setMounted] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [inputValue, setInputValue] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
-  const [attachments, setAttachments] = useState<File[]>([]);
-  const [sessionId, setSessionId] = useState<string>("");
+  const [language, setLanguage] = useState<Language>("en");
+  const [theme, setTheme] = useState<ThemeMode>("light");
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [input, setInput] = useState("");
+  const [thinking, setThinking] = useState(false);
+  const [leftOpen, setLeftOpen] = useState(false);
+  const [rightOpen, setRightOpen] = useState(false);
+  const [confirm, setConfirm] = useState<"active" | "all" | null>(null);
   const [providerStatus, setProviderStatus] = useState<ProviderStatus | null>(null);
-  const [isRecording, setIsRecording] = useState(false);
-  const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const recognitionRef = useRef<any>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [articles, setArticles] = useState<Article[]>([]);
+  const [podcasts, setPodcasts] = useState<Array<Podcast & { url?: string }>>([]);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const [contentLoading, setContentLoading] = useState(true);
 
-  // Mobile detection
-  const isMobile = useIsMobile();
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+  const player = useSpeechPlayer(language);
+  const t = dictionary[language];
 
-  // Haptic feedback for mobile
-  const hapticFeedback = useCallback(() => {
-    if (isMobile && typeof navigator !== "undefined" && navigator.vibrate) {
-      navigator.vibrate(10);
-    }
-  }, [isMobile]);
-
-  // Speech synthesis state
-  const [isSpeaking, setIsSpeaking] = useState(false);
-  const [speakingMessageId, setSpeakingMessageId] = useState<string | null>(null);
-  const [autoSpeak, setAutoSpeak] = useState(false);
-  const [selectedVoice, setSelectedVoice] = useState<SpeechSynthesisVoice | null>(null);
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
-  const synthesisRef = useRef<SpeechSynthesis | null>(null);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
-
-  const [tools, setTools] = useState<Tool[]>([
-    { id: "search", name: "Knowledge Search", icon: "search", enabled: true },
-    { id: "stories", name: "Story Mode", icon: "auto_stories", enabled: true },
-    { id: "mining", name: "Basin Mining", icon: "water", enabled: false },
-    { id: "governance", name: "Governance", icon: "gavel", enabled: false },
-  ]);
-
-  // Scroll only the conversation, never the whole page.
-  const chatScrollRef = useRef<HTMLDivElement>(null);
-  const scrollToBottom = () => {
-    const el = chatScrollRef.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  };
+  const activeConversation = useMemo(
+    () => conversations.find((conversation) => conversation.id === activeId) ?? null,
+    [conversations, activeId]
+  );
+  const messages = useMemo(() => activeConversation?.messages ?? [], [activeConversation]);
 
   useEffect(() => {
     setMounted(true);
+    try {
+      const savedLanguage = window.localStorage.getItem(LANGUAGE_KEY);
+      if (savedLanguage === "en" || savedLanguage === "sw") setLanguage(savedLanguage);
+      const savedTheme = window.localStorage.getItem(THEME_KEY);
+      if (savedTheme === "light" || savedTheme === "dark") {
+        setTheme(savedTheme);
+      } else if (window.matchMedia?.("(prefers-color-scheme: dark)").matches) {
+        setTheme("dark");
+      }
+    } catch {
+      /* storage can be unavailable */
+    }
+    setConversations(readConversations());
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      const stored = conversations.slice(0, MAX_CONVERSATIONS).map((conversation) => ({
+        ...conversation,
+        messages: conversation.messages.map((message) =>
+          message.animate ? { ...message, animate: false } : message
+        ),
+      }));
+      window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(stored));
+    } catch {
+      /* storage can be full or unavailable */
+    }
+  }, [conversations, mounted]);
+
+  useEffect(() => {
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      window.localStorage.setItem(LANGUAGE_KEY, language);
+    } catch {
+      /* ignore */
+    }
+    document.documentElement.lang = language;
+    return () => {
+      document.documentElement.lang = "en";
+    };
+  }, [language, mounted]);
+
+  useEffect(() => {
+    if (!mounted) return;
+    try {
+      window.localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* ignore */
+    }
+    document.documentElement.style.colorScheme = theme;
+    return () => {
+      document.documentElement.style.colorScheme = "";
+    };
+  }, [theme, mounted]);
+
+  useEffect(() => {
+    let alive = true;
+    const load = async () => {
+      const [articleList, podcastList, hubPodcasts, hubMedia] = await Promise.all([
+        articleService.getArticles().catch(() => [] as Article[]),
+        podcastService.getPodcasts().catch(() => [] as Podcast[]),
+        kaiPodcasts().catch(() => [] as Array<Podcast & { url?: string }>),
+        kaiMedia().catch(() => [] as MediaItem[]),
+      ]);
+      if (!alive) return;
+      setArticles(articleList);
+      setPodcasts(dedupePodcasts([...hubPodcasts, ...podcastList]));
+      setMedia(hubMedia);
+      setContentLoading(false);
+    };
+    void load();
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -123,505 +187,384 @@ export default function AgentSihuPage() {
       try {
         const response = await fetch("/api/keys");
         if (!response.ok) return;
-        const data = (await response.json()) as ProviderStatus;
-        setProviderStatus(data);
-      } catch (error) {
-        console.error("Failed to load AI provider status:", error);
+        setProviderStatus((await response.json()) as ProviderStatus);
+      } catch {
+        /* status is optional */
       }
     };
-
-    loadProviderStatus();
+    void loadProviderStatus();
   }, []);
 
   useEffect(() => {
-    if (typeof window === "undefined") return;
-
-    const existing = window.localStorage.getItem("sihu_agent_session_id");
-    if (existing) {
-      setSessionId(existing);
-      return;
-    }
-
-    const generated = `sihu-${crypto.randomUUID()}`;
-    window.localStorage.setItem("sihu_agent_session_id", generated);
-    setSessionId(generated);
-  }, []);
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
-
-  // Mobile keyboard visibility detection
-  useEffect(() => {
-    if (!isMobile || typeof window === "undefined") return;
-
-    const handleResize = () => {
-      // Detect keyboard by comparing window height
-      const viewportHeight = window.visualViewport?.height || window.innerHeight;
-      const windowHeight = window.innerHeight;
-      const keyboardOpen = viewportHeight < windowHeight * 0.8;
-      setKeyboardVisible(keyboardOpen);
-    };
-
-    window.visualViewport?.addEventListener("resize", handleResize);
-    window.addEventListener("resize", handleResize);
-    handleResize();
-
-    return () => {
-      window.visualViewport?.removeEventListener("resize", handleResize);
-      window.removeEventListener("resize", handleResize);
-    };
-  }, [isMobile]);
-
-  // Speech Recognition Setup
-  useEffect(() => {
-    if (typeof window !== "undefined" && "webkitSpeechRecognition" in window) {
-      const SpeechRecognition = (window as any).webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.continuous = false;
-      recognitionRef.current.interimResults = false;
-      recognitionRef.current.lang = "en-US";
-
-      recognitionRef.current.onresult = (event: any) => {
-        const transcript = event.results[0][0].transcript;
-        setInputValue(transcript);
-        setIsRecording(false);
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsRecording(false);
-      };
-
-      recognitionRef.current.onerror = () => {
-        setIsRecording(false);
-      };
-    }
-  }, []);
-
-  const startRecording = () => {
-    if (recognitionRef.current) {
-      setIsRecording(true);
-      recognitionRef.current.start();
-    }
-  };
-
-  const stopRecording = () => {
-    if (recognitionRef.current) {
-      recognitionRef.current.stop();
-      setIsRecording(false);
-    }
-  };
-
-  // Speech Synthesis Setup and Functions
-  useEffect(() => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return;
-
-    synthesisRef.current = window.speechSynthesis;
-
-    const loadVoices = () => {
-      const voices = synthesisRef.current?.getVoices() || [];
-      setAvailableVoices(voices);
-
-      // Prefer a good English voice
-      const preferredVoice = voices.find(
-        (v) =>
-          v.name.includes("Google US English") ||
-          v.name.includes("Samantha") ||
-          v.name.includes("Karen") ||
-          (v.lang === "en-US" && v.default)
-      );
-
-      if (preferredVoice) {
-        setSelectedVoice(preferredVoice);
-      } else if (voices.length > 0) {
-        setSelectedVoice(voices[0]);
+    if (!leftOpen && !rightOpen && !confirm) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      if (confirm) {
+        setConfirm(null);
+      } else {
+        setLeftOpen(false);
+        setRightOpen(false);
       }
     };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [confirm, leftOpen, rightOpen]);
 
-    loadVoices();
+  const latestAssistant = useMemo(
+    () => [...messages].reverse().find((message) => message.role === "assistant" && !message.error) ?? null,
+    [messages]
+  );
 
-    // Voices load asynchronously
-    if (synthesisRef.current) {
-      synthesisRef.current.onvoiceschanged = loadVoices;
-    }
+  const latestSources = useMemo(
+    () => resolveSources(latestAssistant?.sourceIds, articles),
+    [latestAssistant, articles]
+  );
 
-    return () => {
-      if (synthesisRef.current) {
-        synthesisRef.current.cancel();
-      }
-    };
+  const related = useMemo(
+    () =>
+      buildRelatedContent({
+        articles,
+        podcasts,
+        media,
+        excludeArticleIds: sourceArticleIds(latestSources),
+        limit: 6,
+      }),
+    [articles, podcasts, media, latestSources]
+  );
+
+  const online = providerStatus
+    ? !!providerStatus.configured[providerStatus.activeProvider]
+    : true;
+
+  const closeDrawers = useCallback(() => {
+    setLeftOpen(false);
+    setRightOpen(false);
   }, []);
 
-  const speakMessage = (text: string, messageId: string) => {
-    if (!synthesisRef.current || !text) return;
+  const newChat = useCallback(() => {
+    player.stop();
+    setActiveId(null);
+    setInput("");
+    closeDrawers();
+  }, [closeDrawers, player]);
 
-    // Stop any current speech
-    stopSpeaking();
+  const selectConversation = useCallback(
+    (id: string) => {
+      player.stop();
+      setActiveId(id);
+      setInput("");
+      closeDrawers();
+    },
+    [closeDrawers, player]
+  );
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utteranceRef.current = utterance;
+  const deleteConversation = useCallback(
+    (id: string) => {
+      setConversations((current) => current.filter((conversation) => conversation.id !== id));
+      setActiveId((current) => (current === id ? null : current));
+    },
+    []
+  );
 
-    if (selectedVoice) {
-      utterance.voice = selectedVoice;
+  const confirmClear = useCallback(() => {
+    player.stop();
+    if (confirm === "all") {
+      setConversations([]);
+      setActiveId(null);
+    } else if (confirm === "active" && activeId) {
+      setConversations((current) => current.filter((conversation) => conversation.id !== activeId));
+      setActiveId(null);
     }
+    setConfirm(null);
+  }, [activeId, confirm, player]);
 
-    utterance.rate = 0.9; // Slightly slower for storytelling
-    utterance.pitch = 1;
-    utterance.volume = 1;
+  const sendMessage = useCallback(
+    async (raw: string) => {
+      const text = raw.trim();
+      if (!text || thinking) return;
 
-    utterance.onstart = () => {
-      setIsSpeaking(true);
-      setSpeakingMessageId(messageId);
-    };
+      setInput("");
+      setThinking(true);
+      setLeftOpen(false);
+      setRightOpen(false);
 
-    utterance.onend = () => {
-      setIsSpeaking(false);
-      setSpeakingMessageId(null);
-    };
+      const now = Date.now();
+      const userMessage: ChatMessageData = {
+        id: `u-${makeId()}`,
+        role: "user",
+        content: text,
+        createdAt: now,
+      };
 
-    utterance.onerror = () => {
-      setIsSpeaking(false);
-      setSpeakingMessageId(null);
-    };
+      let conversationId = activeId;
+      let sessionId = activeConversation?.sessionId;
+      const history = (activeConversation?.messages ?? [])
+        .slice(-8)
+        .map((message) => ({ role: message.role, content: message.content }));
 
-    synthesisRef.current.speak(utterance);
-  };
-
-  const stopSpeaking = () => {
-    if (synthesisRef.current) {
-      synthesisRef.current.cancel();
-    }
-    setIsSpeaking(false);
-    setSpeakingMessageId(null);
-  };
-
-  const toggleAutoSpeak = () => {
-    setAutoSpeak((prev) => !prev);
-  };
-
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(event.target.files || []);
-    setAttachments((prev) => [...prev, ...files]);
-  };
-
-  const removeAttachment = (index: number) => {
-    setAttachments((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const sendMessage = async () => {
-    if (!inputValue.trim() && attachments.length === 0) return;
-    const messageText = inputValue.trim();
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: "user",
-      content: messageText,
-      timestamp: new Date(),
-      attachments: attachments.length > 0 ? [...attachments] : undefined,
-    };
-
-    setMessages((prev) => [...prev, userMessage]);
-    setInputValue("");
-    setAttachments([]);
-    setIsTyping(true);
-
-    try {
-      const response = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          message: messageText,
+      if (!conversationId || !sessionId) {
+        conversationId = makeId();
+        sessionId = `sihu-${makeId()}`;
+        const conversation: Conversation = {
+          id: conversationId,
           sessionId,
-          history: messages.slice(-6).map((item) => ({
-            role: item.role,
-            content: item.content,
-          })),
-        }),
-      });
-
-      const data = (await response.json()) as {
-        reply?: string;
-        provider?: string;
-        model?: string;
-        mode?: string;
-        error?: string;
-        speechText?: string;
-        isStory?: boolean;
-      };
-
-      const aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
-        role: "assistant",
-        content:
-          data.reply ||
-          data.error ||
-          "I could not generate a response right now.",
-        timestamp: new Date(),
-        speechText: data.speechText,
-        isStory: data.isStory,
-      };
-
-      setMessages((prev) => [...prev, aiResponse]);
-
-      // Auto-speak if enabled and this is a story
-      if (autoSpeak && data.speechText && data.isStory) {
-        setTimeout(() => {
-          speakMessage(data.speechText!, aiResponse.id);
-        }, 500);
+          title: text.length > 64 ? `${text.slice(0, 64)}…` : text,
+          updatedAt: now,
+          messages: [userMessage],
+        };
+        setConversations((current) => [conversation, ...current].slice(0, MAX_CONVERSATIONS));
+        setActiveId(conversationId);
+      } else {
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === conversationId
+              ? {
+                  ...conversation,
+                  messages: [...conversation.messages, userMessage],
+                  updatedAt: now,
+                }
+              : conversation
+          )
+        );
       }
-    } catch (error) {
-      console.error("AI chat failed:", error);
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: (Date.now() + 1).toString(),
+
+      const targetId = conversationId;
+
+      try {
+        const response = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: text,
+            sessionId,
+            language,
+            history,
+          }),
+        });
+        const data = (await response.json()) as ChatResponse;
+
+        if (!response.ok) {
+          throw new Error(data.error || "Chat request failed");
+        }
+
+        const reply = typeof data.reply === "string" && data.reply.trim() ? data.reply : t.errorReply;
+        const assistantMessage: ChatMessageData = {
+          id: `a-${makeId()}`,
           role: "assistant",
-          content:
-            "I could not reach the AI service right now. Please try again in a moment.",
-          timestamp: new Date(),
-        },
-      ]);
-    } finally {
-      setIsTyping(false);
-    }
-  };
+          content: reply,
+          createdAt: Date.now(),
+          speechText: typeof data.speechText === "string" ? data.speechText : undefined,
+          sourceIds: Array.isArray(data.sources)
+            ? data.sources.filter((source): source is string => typeof source === "string")
+            : [],
+          animate: true,
+        };
 
-  const toggleTool = (toolId: string) => {
-    setTools((prev) =>
-      prev.map((tool) =>
-        tool.id === toolId ? { ...tool, enabled: !tool.enabled } : tool
-      )
-    );
-  };
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === targetId
+              ? {
+                  ...conversation,
+                  messages: [...conversation.messages, assistantMessage],
+                  updatedAt: Date.now(),
+                }
+              : conversation
+          )
+        );
+      } catch {
+        const errorMessage: ChatMessageData = {
+          id: `a-${makeId()}`,
+          role: "assistant",
+          content: t.errorReply,
+          createdAt: Date.now(),
+          error: true,
+        };
+        setConversations((current) =>
+          current.map((conversation) =>
+            conversation.id === targetId
+              ? {
+                  ...conversation,
+                  messages: [...conversation.messages, errorMessage],
+                  updatedAt: Date.now(),
+                }
+              : conversation
+          )
+        );
+      } finally {
+        setThinking(false);
+      }
+    },
+    [activeConversation, activeId, language, t.errorReply, thinking]
+  );
 
-  const pickPrompt = (prompt: string) => {
-    hapticFeedback();
-    setInputValue(prompt);
+  const handleFollowUp = useCallback(() => {
     textareaRef.current?.focus();
-  };
-
-  const newChat = () => {
-    stopSpeaking();
-    setMessages([]);
-    setInputValue("");
-    setAttachments([]);
-    setSidebarOpen(false);
-  };
+    textareaRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, []);
 
   const sidebar = (
-    <div className="flex flex-col h-full">
-      <button onClick={newChat} className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-full bg-slate-900 hover:bg-sky-600 text-white text-[14.5px] font-semibold transition-colors">
-        <Plus size={17} /> New chat
-      </button>
-
-      <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500 mt-7 mb-2">Try asking</p>
-      <div className="space-y-1">
-        {SUGGESTIONS.map((s) => (
-          <button key={s.title} onClick={() => { pickPrompt(s.prompt); setSidebarOpen(false); }}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] text-slate-700 hover:bg-slate-100 transition-colors">
-            <s.Icon size={17} className="text-sky-600 shrink-0" /> {s.title}
-          </button>
-        ))}
-      </div>
-
-      <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500 mt-7 mb-2">Tools</p>
-      <div className="space-y-1">
-        {tools.map((tool) => {
-          const Icon = TOOL_ICON[tool.icon] ?? Sparkles;
-          return (
-            <button key={tool.id} onClick={() => toggleTool(tool.id)} role="switch" aria-checked={tool.enabled}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] text-slate-700 hover:bg-slate-100 transition-colors">
-              <Icon size={17} className={tool.enabled ? "text-sky-600" : "text-slate-400"} />
-              <span className="flex-1">{tool.name}</span>
-              <span className={`w-9 h-5 rounded-full p-0.5 transition-colors ${tool.enabled ? "bg-sky-500" : "bg-slate-200"}`}>
-                <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${tool.enabled ? "translate-x-4" : ""}`} />
-              </span>
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-slate-500 mt-7 mb-2">Voice</p>
-      <button onClick={toggleAutoSpeak} role="switch" aria-checked={autoSpeak}
-        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-[14px] text-slate-700 hover:bg-slate-100 transition-colors">
-        {autoSpeak ? <Volume2 size={17} className="text-sky-600" /> : <VolumeX size={17} className="text-slate-400" />}
-        <span className="flex-1">Read stories aloud</span>
-        <span className={`w-9 h-5 rounded-full p-0.5 transition-colors ${autoSpeak ? "bg-sky-500" : "bg-slate-200"}`}>
-          <span className={`block w-4 h-4 rounded-full bg-white shadow transition-transform ${autoSpeak ? "translate-x-4" : ""}`} />
-        </span>
-      </button>
-      {availableVoices.length > 0 && (
-        <select
-          value={selectedVoice?.name ?? ""}
-          onChange={(e) => setSelectedVoice(availableVoices.find((v) => v.name === e.target.value) ?? null)}
-          className="mt-2 w-full px-3 py-2.5 rounded-xl border border-slate-200 bg-white text-[13.5px] text-slate-700 focus:outline-none focus:border-sky-500"
-          aria-label="Voice"
-        >
-          {availableVoices.filter((v) => v.lang.startsWith("en")).slice(0, 30).map((v) => <option key={v.name} value={v.name}>{v.name}</option>)}
-        </select>
-      )}
-
-      {providerStatus && (
-        <p className="mt-auto pt-6 text-[12px] text-slate-400 flex items-center gap-1.5">
-          <span className={`w-2 h-2 rounded-full ${providerStatus.configured[providerStatus.activeProvider] ? "bg-emerald-500" : "bg-amber-500"}`} />
-          {providerStatus.configured[providerStatus.activeProvider] ? "AI connected" : "AI running in offline mode"}
-        </p>
-      )}
-    </div>
+    <AISidebar
+      language={language}
+      theme={theme}
+      conversations={conversations}
+      activeId={activeId}
+      onSelectConversation={selectConversation}
+      onDeleteConversation={deleteConversation}
+      onNewChat={newChat}
+      onClearAll={() => setConfirm("all")}
+      onLanguageChange={setLanguage}
+      onThemeToggle={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+    />
   );
 
   return (
-    <div className="bg-[#f6f8fb] text-slate-900">
-      <NewsHeader />
-      {/* The chat fills the screen under the header, like a messaging app (no site footer here). */}
+    <div className={`ai-shell ${theme === "dark" ? "ai-dark" : ""} fixed inset-0 z-40 flex flex-col overflow-hidden`}>
       <style>{`.site-footer{display:none}`}</style>
-      <div className="fixed inset-x-0 bottom-0 top-[72px] z-40 flex bg-[#f6f8fb]">
-        {/* Sidebar: desktop */}
-        <aside className="hidden lg:flex w-[290px] shrink-0 flex-col bg-white border-r border-slate-200 p-5 overflow-y-auto">{sidebar}</aside>
 
-        {/* Sidebar: phone drawer */}
-        {sidebarOpen && (
-          <div className="lg:hidden fixed inset-0 z-[60] bg-slate-900/40" onClick={() => setSidebarOpen(false)}>
-            <aside className="absolute left-0 top-0 bottom-0 w-[85%] max-w-[320px] bg-white p-5 pt-6 overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="flex items-center justify-between mb-5">
-                <p className="font-heading font-bold text-[18px]">Agent SIHU</p>
-                <button onClick={() => setSidebarOpen(false)} aria-label="Close" className="w-10 h-10 rounded-full hover:bg-slate-100 flex items-center justify-center"><X size={19} /></button>
-              </div>
-              {sidebar}
-            </aside>
-          </div>
-        )}
+      <div className="flex min-h-0 flex-1">
+        <div className="hidden w-[280px] shrink-0 border-r border-[var(--ai-border)] lg:block">
+          {sidebar}
+        </div>
 
-        {/* Chat */}
-        <main className="flex-1 min-w-0 flex flex-col">
-          <div className="flex items-center gap-3 px-4 md:px-6 h-14 border-b border-slate-200 bg-white/80 backdrop-blur shrink-0">
-            <button onClick={() => setSidebarOpen(true)} aria-label="Open menu" className="lg:hidden w-10 h-10 -ml-2 rounded-full hover:bg-slate-100 flex items-center justify-center"><PanelLeft size={19} /></button>
-            <span className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center"><Bot size={17} /></span>
-            <div className="min-w-0">
-              <p className="font-bold text-[15px] leading-tight">Agent SIHU</p>
-              <p className="text-[12px] text-slate-500 leading-tight">Storyteller for the Lake Victoria Basin</p>
-            </div>
-            {messages.length > 0 && (
-              <button onClick={newChat} className="ml-auto inline-flex items-center gap-1.5 px-3 py-2 rounded-full text-[13px] font-semibold text-slate-600 hover:bg-slate-100"><Plus size={15} /> New chat</button>
-            )}
-          </div>
+        <main className="flex min-w-0 flex-1 flex-col bg-[var(--ai-bg)]">
+          <AIHeader
+            language={language}
+            theme={theme}
+            online={online}
+            hasMessages={messages.length > 0}
+            onLanguageChange={setLanguage}
+            onThemeToggle={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+            onOpenSidebar={() => setLeftOpen(true)}
+            onOpenSources={() => setRightOpen(true)}
+            onNewChat={newChat}
+            onClear={() => setConfirm("active")}
+          />
 
-          <div ref={chatScrollRef} className="flex-1 overflow-y-auto">
-            <div className="max-w-3xl mx-auto px-4 md:px-6 py-8 space-y-6">
-              {messages.length === 0 && (
-                <div className="text-center pt-6 md:pt-14">
-                  <span className="mx-auto w-16 h-16 rounded-2xl bg-sky-600 text-white flex items-center justify-center shadow-lg shadow-sky-600/25"><Bot size={30} /></span>
-                  <h1 className="font-heading text-[30px] md:text-[38px] font-bold mt-6 leading-tight">How can I help you today?</h1>
-                  <p className="text-[16px] text-slate-600 mt-3 max-w-lg mx-auto leading-relaxed">
-                    I am Agent SIHU, the storyteller for the Lake Victoria Basin. Ask me about Sango, the health of the lake, rewards or the latest news.
-                  </p>
-                  <div className="grid sm:grid-cols-2 gap-3 mt-9 text-left">
-                    {SUGGESTIONS.map((s) => (
-                      <button key={s.title} onClick={() => pickPrompt(s.prompt)}
-                        className="group flex items-start gap-3 p-4 rounded-2xl bg-white border border-slate-200 text-left hover:border-sky-300 hover:shadow-[0_12px_28px_-16px_rgba(2,132,199,0.5)] transition-all">
-                        <span className="w-10 h-10 rounded-xl bg-sky-50 text-sky-700 flex items-center justify-center shrink-0 group-hover:bg-sky-600 group-hover:text-white transition-colors"><s.Icon size={19} /></span>
-                        <span>
-                          <span className="block font-semibold text-[15px]">{s.title}</span>
-                          <span className="block text-[13px] text-slate-500 mt-0.5 line-clamp-2">{s.prompt}</span>
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
+          <AIChat
+            messages={messages}
+            language={language}
+            thinking={thinking}
+            articles={articles}
+            related={related}
+            player={player}
+            onSuggestion={sendMessage}
+            onFollowUp={handleFollowUp}
+          />
 
-              {messages.map((message) => {
-                const mine = message.role === "user";
-                const speaking = isSpeaking && speakingMessageId === message.id;
-                return (
-                  <div key={message.id} className={`flex items-start gap-3 ${mine ? "justify-end" : ""}`}>
-                    {!mine && <span className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center shrink-0 mt-1"><Bot size={16} /></span>}
-                    <div className={`flex flex-col gap-1.5 max-w-[85%] md:max-w-[78%] ${mine ? "items-end" : "items-start"}`}>
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="flex flex-wrap gap-2">
-                          {message.attachments.map((file, index) => (
-                            <span key={index} className="inline-flex items-center gap-1.5 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-[12.5px] text-slate-600"><Paperclip size={13} /> {file.name}</span>
-                          ))}
-                        </div>
-                      )}
-                      <div className={`rounded-2xl px-4 py-3 text-[15px] leading-relaxed whitespace-pre-wrap ${mine ? "bg-slate-900 text-white rounded-tr-md" : "bg-white text-slate-800 border border-slate-200 rounded-tl-md"}`}>
-                        <RichText text={message.content} />
-                      </div>
-                      <div className="flex items-center gap-2 text-[12px] text-slate-400">
-                        {!mine && message.speechText && (
-                          <button onClick={() => (speaking ? stopSpeaking() : speakMessage(message.speechText!, message.id))}
-                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-semibold transition-colors ${speaking ? "bg-sky-100 text-sky-700" : "text-slate-500 hover:bg-slate-100"}`}>
-                            {speaking ? <><Square size={12} /> Stop</> : <><Volume2 size={13} /> Listen</>}
-                          </button>
-                        )}
-                        {!mine && message.isStory && <span className="inline-flex items-center gap-1 text-sky-700 font-semibold"><BookOpen size={12} /> Story</span>}
-                        <span>{mounted ? message.timestamp.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "\u00A0"}</span>
-                      </div>
-                    </div>
-                    {mine && <span className="w-8 h-8 rounded-full bg-slate-200 text-slate-600 flex items-center justify-center shrink-0 mt-1"><User size={16} /></span>}
-                  </div>
-                );
-              })}
-
-              {isTyping && (
-                <div className="flex items-start gap-3">
-                  <span className="w-8 h-8 rounded-full bg-sky-600 text-white flex items-center justify-center shrink-0"><Bot size={16} /></span>
-                  <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-md px-4 py-3.5 flex items-center gap-1.5" aria-label="Agent SIHU is typing">
-                    {[0, 1, 2].map((d) => <span key={d} className="w-2 h-2 rounded-full bg-slate-400 animate-bounce" style={{ animationDelay: `${d * 0.15}s` }} />)}
-                  </div>
-                </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
-          </div>
-
-          {/* Composer */}
-          <div className="shrink-0 border-t border-slate-200 bg-white px-3 md:px-6 pt-3" style={{ paddingBottom: "max(12px, env(safe-area-inset-bottom, 12px))" }}>
-            <div className="max-w-3xl mx-auto">
-              {attachments.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {attachments.map((file, index) => (
-                    <span key={index} className="inline-flex items-center gap-1.5 bg-slate-100 rounded-lg pl-3 pr-1 py-1 text-[12.5px] text-slate-700">
-                      <Paperclip size={13} /> {file.name}
-                      <button onClick={() => removeAttachment(index)} aria-label={`Remove ${file.name}`} className="w-6 h-6 rounded-md hover:bg-slate-200 flex items-center justify-center"><X size={13} /></button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-end gap-2 rounded-3xl border border-slate-300 bg-white px-2 py-2 focus-within:border-sky-500 focus-within:ring-4 focus-within:ring-sky-500/15 transition-shadow">
-                <button onClick={() => fileInputRef.current?.click()} aria-label="Attach a file" className="w-10 h-10 shrink-0 rounded-full text-slate-500 hover:bg-slate-100 flex items-center justify-center"><Paperclip size={19} /></button>
-                <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileUpload} />
-                <textarea
-                  ref={textareaRef}
-                  value={inputValue}
-                  onChange={(e) => setInputValue(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void sendMessage(); }
-                  }}
-                  rows={1}
-                  placeholder="Message Agent SIHU"
-                  className="flex-1 min-w-0 resize-none bg-transparent py-2.5 px-1 text-[15px] leading-relaxed placeholder:text-slate-400 focus:outline-none max-h-40"
-                  style={{ height: "auto" }}
-                  onInput={(e) => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = `${Math.min(t.scrollHeight, 160)}px`; }}
-                />
-                <button onClick={() => (isRecording ? stopRecording() : startRecording())} aria-label={isRecording ? "Stop voice input" : "Speak your question"}
-                  className={`w-10 h-10 shrink-0 rounded-full flex items-center justify-center transition-colors ${isRecording ? "bg-rose-600 text-white animate-pulse" : "text-slate-500 hover:bg-slate-100"}`}>
-                  {isRecording ? <MicOff size={19} /> : <Mic size={19} />}
-                </button>
-                <button onClick={() => { hapticFeedback(); void sendMessage(); }} disabled={!inputValue.trim() && attachments.length === 0}
-                  aria-label="Send message" className="w-10 h-10 shrink-0 rounded-full bg-sky-600 hover:bg-sky-500 disabled:bg-slate-200 disabled:text-slate-400 text-white flex items-center justify-center transition-colors">
-                  <Send size={17} />
-                </button>
-              </div>
-              <p className={`text-center text-[12px] text-slate-400 mt-2 ${keyboardVisible ? "hidden" : ""}`}>
-                Agent SIHU can make mistakes. Check important facts in the <Link href="/portal" className="underline hover:text-slate-600">news</Link>.
-              </p>
-            </div>
+          <div className="shrink-0 border-t border-[var(--ai-border)] bg-[var(--ai-bg)]">
+            <ChatInput
+              value={input}
+              onChange={setInput}
+              onSubmit={sendMessage}
+              language={language}
+              disabled={thinking}
+              inputRef={textareaRef}
+            />
           </div>
         </main>
+
+        <div className="hidden w-[320px] shrink-0 border-l border-[var(--ai-border)] xl:block">
+          <RelatedContent
+            sources={latestSources}
+            items={related}
+            language={language}
+            loading={contentLoading}
+          />
+        </div>
       </div>
+
+      {leftOpen && (
+        <div className="fixed inset-0 z-[60] lg:hidden" role="presentation">
+          <button
+            type="button"
+            aria-label={t.close}
+            onClick={() => setLeftOpen(false)}
+            className="absolute inset-0 bg-[var(--ai-navy)]/45"
+          />
+          <div className="absolute inset-y-0 left-0 w-[86%] max-w-[320px] shadow-2xl">
+            <AISidebar
+              language={language}
+              theme={theme}
+              conversations={conversations}
+              activeId={activeId}
+              onSelectConversation={selectConversation}
+              onDeleteConversation={deleteConversation}
+              onNewChat={newChat}
+              onClearAll={() => setConfirm("all")}
+              onLanguageChange={setLanguage}
+              onThemeToggle={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+              onClose={() => setLeftOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {rightOpen && (
+        <div className="fixed inset-0 z-[60] xl:hidden" role="presentation">
+          <button
+            type="button"
+            aria-label={t.close}
+            onClick={() => setRightOpen(false)}
+            className="absolute inset-0 bg-[var(--ai-navy)]/45"
+          />
+          <div className="absolute inset-y-0 right-0 w-[92%] max-w-[380px] shadow-2xl">
+            <RelatedContent
+              sources={latestSources}
+              items={related}
+              language={language}
+              loading={contentLoading}
+              onClose={() => setRightOpen(false)}
+            />
+          </div>
+        </div>
+      )}
+
+      {confirm && (
+        <div
+          className="fixed inset-0 z-[70] flex items-center justify-center bg-[var(--ai-navy)]/50 p-4"
+          role="presentation"
+          onClick={() => setConfirm(null)}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ai-confirm-title"
+            className="w-full max-w-sm rounded-2xl bg-[var(--ai-surface)] p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <h2 id="ai-confirm-title" className="text-[16px] font-semibold text-[var(--ai-text)]">
+                {confirm === "all" ? `${t.clearAll}?` : t.clearConfirmTitle}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setConfirm(null)}
+                aria-label={t.close}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-[var(--ai-muted)] hover:bg-[var(--ai-surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="mt-2 text-[13px] leading-relaxed text-[var(--ai-muted)]">{t.clearConfirmBody}</p>
+            <div className="mt-5 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirm(null)}
+                className="rounded-full px-3.5 py-2 text-[12.5px] font-semibold text-[var(--ai-muted)] hover:bg-[var(--ai-surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
+              >
+                {t.cancel}
+              </button>
+              <button
+                type="button"
+                onClick={confirmClear}
+                className="rounded-full bg-red-600 px-3.5 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-red-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500"
+              >
+                {confirm === "all" ? t.clearAll : t.confirm}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
