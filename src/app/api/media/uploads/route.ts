@@ -38,7 +38,12 @@ export async function POST(req: Request) {
     const kind = mediaKindForMime(mime);
 
     if (!kind) {
-      throw new ApiError("Upload a JPEG, PNG, WebP, GIF, MP4 or WebM file.");
+      throw new ApiError("Upload a photo (JPEG, PNG, WebP, GIF) or a video.");
+    }
+    // Videos are converted to MP4 / WebM in the browser before upload; only
+    // those browser-ready formats are stored.
+    if (kind === "video" && mime !== "video/mp4" && mime !== "video/webm") {
+      throw new ApiError("Videos are uploaded as MP4 or WebM after processing. Please choose the video again.");
     }
     if (!Number.isFinite(size) || size <= 0) {
       throw new ApiError("That file is empty.");

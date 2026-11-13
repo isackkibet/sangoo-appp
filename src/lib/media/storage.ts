@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { mkdir, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import { MAX_VIDEO_BYTES } from "@/lib/media/validation";
+import { MAX_VIDEO_BYTES, sniffStoredMime } from "@/lib/media/validation";
 
 function normalizeBucketName(value: string | undefined): string {
   // Accept values like `media # comment` and avoid using a comment as the bucket name.
@@ -213,4 +213,39 @@ export async function removeMedia(storagePath: string | null | undefined): Promi
   } catch (error) {
     console.error("Could not remove stored media:", error);
   }
+}
+
+/**
+ * Check what was actually uploaded to `objectPath` (a direct, signed upload)
+ * by reading its first bytes. Returns the real MIME type, or deletes the
+ * object and throws when it is not an accepted image/video of `kind`.
+ */
+export async function verifyDirectUpload(
+  objectPath: string,
+  kind: "image" | "video",
+): Promise<string> {
+  let head: Uint8Array | null = null;
+  try {
+    const res = await fetch(publicUrlFor(objectPath), {
+      headers: { Range: "bytes=0-4095" },
+      cache: "no-store",
+    });
+    if (res.ok) head = new Uint8Array(await res.arrayBuffer()).subarray(0, 4096);
+  } catch {
+    head = null;
+  }
+  if (!head) {
+    throw new Error("The uploaded file could not be found. Please upload it again.");
+  }
+  const mime = sniffStoredMime(head);
+  const actualKind = mime?.startsWith("video/") ? "video" : mime?.startsWith("image/") ? "image" : null;
+  if (!mime || actualKind !== kind) {
+    await removeMedia(`supabase:${objectPath}`);
+    throw new Error(
+      kind === "video"
+        ? "That upload is not a valid MP4 or WebM video. Please choose the video again."
+        : "That upload is not a valid photo. Please choose it again.",
+    );
+  }
+  return mime;
 }

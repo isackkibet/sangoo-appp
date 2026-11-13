@@ -11,7 +11,7 @@ import {
   createStory,
   listStoryGroups,
 } from "@/lib/media/service";
-import { putMedia, publicUrlFor, removeMedia, storageConfigured } from "@/lib/media/storage";
+import { putMedia, publicUrlFor, removeMedia, storageConfigured, verifyDirectUpload } from "@/lib/media/storage";
 import {
   MAX_CAPTION,
   clampInt,
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
       const mime = typeof record.mime === "string" ? record.mime.toLowerCase() : "";
       const kind = mediaKindForMime(mime);
       if (!kind) {
-        throw new ApiError("Upload a JPEG, PNG, WebP, GIF, MP4 or WebM file.");
+        throw new ApiError("Upload a photo (JPEG, PNG, WebP, GIF) or a video.");
       }
       if (
         !storagePath.startsWith(`stories/${user.id}/`) ||
@@ -78,6 +78,13 @@ export async function POST(req: Request) {
       if (!allowedExt.includes(ext)) {
         throw new ApiError("Invalid upload path.");
       }
+      // Check the stored bytes; a mismatching file is deleted.
+      let actualMime: string;
+      try {
+        actualMime = await verifyDirectUpload(storagePath, kind);
+      } catch (error) {
+        throw new ApiError(error instanceof Error ? error.message : "Invalid upload.");
+      }
 
       const caption = sanitizeText(
         record.caption ?? body.caption ?? "",
@@ -89,7 +96,7 @@ export async function POST(req: Request) {
           kind,
           url: publicUrlFor(storagePath),
           storagePath: `supabase:${storagePath}`,
-          mime,
+          mime: actualMime,
           width: clampInt(record.width, 1, 10000, 1080),
           height: clampInt(record.height, 1, 10000, 1920),
           durationMs:

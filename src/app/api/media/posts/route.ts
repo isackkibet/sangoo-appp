@@ -14,6 +14,7 @@ import {
   publicUrlFor,
   removeMedia,
   storageConfigured,
+  verifyDirectUpload,
 } from "@/lib/media/storage";
 import {
   MAX_ALT,
@@ -113,6 +114,19 @@ export async function POST(req: Request) {
       }
 
       const media: NewMediaInput[] = [];
+      // Every file uploaded straight to storage is re-checked by its bytes. If
+      // anything fails, all files from this request are removed.
+      const uploadedPaths: string[] = [];
+      const ownedPath = (p: string, exts: string[]) =>
+        p.startsWith(`posts/${user.id}/`) && !p.includes("..") && /^[A-Za-z0-9/_.-]+$/.test(p) &&
+        exts.includes(p.split(".").pop()?.toLowerCase() ?? "");
+      for (const item of rawMedia) {
+        const r = item && typeof item === "object" ? (item as Record<string, unknown>) : {};
+        if (typeof r.path === "string" && ownedPath(r.path, ["mp4", "webm", "mov", "jpg", "jpeg", "png", "webp", "gif"])) uploadedPaths.push(r.path);
+        if (typeof r.posterPath === "string" && ownedPath(r.posterPath, ["jpg", "jpeg", "webp", "png"])) uploadedPaths.push(r.posterPath);
+      }
+      const discardUploads = () => Promise.all(uploadedPaths.map((p) => removeMedia(`supabase:${p}`)));
+      try {
       for (const item of rawMedia) {
         if (!item || typeof item !== "object") {
           throw new ApiError("Invalid upload.");
@@ -122,7 +136,7 @@ export async function POST(req: Request) {
         const mime = typeof record.mime === "string" ? record.mime.toLowerCase() : "";
         const kind = mediaKindForMime(mime);
         if (!kind) {
-          throw new ApiError("Upload a JPEG, PNG, WebP, GIF, MP4 or WebM file.");
+          throw new ApiError("Upload a photo (JPEG, PNG, WebP, GIF) or a video.");
         }
         if (
           !storagePath.startsWith(`posts/${user.id}/`) ||
@@ -139,11 +153,33 @@ export async function POST(req: Request) {
         if (!allowedExt.includes(ext)) {
           throw new ApiError("Invalid upload path.");
         }
+        // The stored bytes decide the type, not the name or the declared MIME.
+        let actualMime: string;
+        try {
+          actualMime = await verifyDirectUpload(storagePath, kind);
+        } catch (error) {
+          throw new ApiError(error instanceof Error ? error.message : "Invalid upload.");
+        }
+        let posterUrl: string | null = null;
+        let posterPath: string | null = null;
+        if (kind === "video" && typeof record.posterPath === "string" && record.posterPath) {
+          const p = record.posterPath;
+          if (!ownedPath(p, ["jpg", "jpeg", "webp", "png"])) throw new ApiError("Invalid thumbnail path.");
+          try {
+            await verifyDirectUpload(p, "image");
+          } catch (error) {
+            throw new ApiError(error instanceof Error ? error.message : "Invalid thumbnail.");
+          }
+          posterUrl = publicUrlFor(p);
+          posterPath = `supabase:${p}`;
+        }
         media.push({
           kind,
           url: publicUrlFor(storagePath),
           storagePath: `supabase:${storagePath}`,
-          mime,
+          posterUrl,
+          posterPath,
+          mime: actualMime,
           width: clampInt(record.width, 1, 10000, 1080),
           height: clampInt(record.height, 1, 10000, 1080),
           durationMs:
@@ -152,6 +188,10 @@ export async function POST(req: Request) {
               : clampInt(record.durationMs, 0, 3_600_000, 0),
           altText: sanitizeText(record.altText, MAX_ALT),
         });
+      }
+      } catch (error) {
+        await discardUploads();
+        throw error;
       }
 
       let taggedUsernames: string[] = [];
@@ -192,7 +232,7 @@ export async function POST(req: Request) {
           { status: 201, headers: { "Cache-Control": "no-store" } },
         );
       } catch (error) {
-        await Promise.all(media.map((item) => removeMedia(item.storagePath)));
+        await Promise.all(media.flatMap((item) => [removeMedia(item.storagePath), removeMedia(item.posterPath)]));
         throw error;
       }
     }

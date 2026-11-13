@@ -37,6 +37,8 @@ export interface MediaImage {
   alt_text: string;
   kind: 'image' | 'video';
   duration_ms?: number | null;
+  /** Thumbnail shown before a video plays. */
+  poster_url?: string | null;
 }
 
 export interface MediaPost {

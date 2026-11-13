@@ -7,6 +7,10 @@ import { X, ImagePlus, Film, Loader2, AlertCircle } from 'lucide-react';
 import { useCreateStoryStore } from '@/store/media/modalStores';
 import { useStoryStore } from '@/store/media/storyStore';
 import { useSihuAuth } from '@/components/auth/SihuAuth';
+import { processVideo } from '@/lib/media/videoPipeline';
+import { VIDEO_ACCEPT } from '@/lib/media/videoFormat';
+import { uploadDirect } from '@/lib/media/directUpload';
+import UploadProgress, { type UploadStatus } from '@/components/media/UploadProgress';
 import {
   prepareMedia,
   SERVER_UPLOAD_MAX_BYTES,
@@ -23,6 +27,9 @@ export default function CreateStoryModal() {
   const [caption, setCaption] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<UploadStatus | null>(null);
+  const [videoMime, setVideoMime] = useState<string | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -55,11 +62,34 @@ export default function CreateStoryModal() {
   const pickFile = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
+    if (file.type.startsWith('image/')) {
+      try {
+        setPreview(await prepareMedia(file));
+        setVideoMime(null);
+      } catch (err) {
+        setPreview(null);
+        setError(err instanceof Error ? err.message : 'Could not read that file.');
+      }
+      return;
+    }
+    // Any video format: identified by its contents, converted to MP4 when needed.
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setPreview(null);
     try {
-      setPreview(await prepareMedia(file));
+      const v = await processVideo(file, p => setStatus({ label: p.message, ratio: p.ratio }), controller.signal);
+      setPreview({ file: v.file, previewUrl: URL.createObjectURL(v.file), width: v.width, height: v.height, kind: 'video', durationMs: v.durationMs });
+      setVideoMime(v.mime);
     } catch (err) {
-      setPreview(null);
-      setError(err instanceof Error ? err.message : 'Could not read that file.');
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setError(err instanceof Error ? err.message : 'Could not process that video.');
+      }
+    } finally {
+      setBusy(false);
+      setStatus(null);
+      abortRef.current = null;
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
 
@@ -70,7 +100,21 @@ export default function CreateStoryModal() {
 
     try {
       let res: Response;
-      if (preview.file.size <= SERVER_UPLOAD_MAX_BYTES) {
+      if (preview.kind === 'video') {
+        const controller = new AbortController();
+        abortRef.current = controller;
+        const mime = videoMime ?? preview.file.type;
+        const up = await uploadDirect(preview.file, mime, 'stories', r => setStatus({ label: 'Uploading video…', ratio: r }), controller.signal);
+        setStatus({ label: 'Publishing…' });
+        res = await fetch('/api/media/stories', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caption,
+            media: { path: up.path, mime, kind: 'video', width: preview.width, height: preview.height, durationMs: preview.durationMs },
+          }),
+        });
+      } else if (preview.file.size <= SERVER_UPLOAD_MAX_BYTES) {
         const form = new FormData();
         form.append('media', preview.file);
         form.append('width', String(preview.width));
@@ -147,9 +191,12 @@ export default function CreateStoryModal() {
       await loadStories(true);
       close();
     } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Could not share your story.');
     } finally {
       setBusy(false);
+      setStatus(null);
+      abortRef.current = null;
     }
   };
 
@@ -224,6 +271,10 @@ export default function CreateStoryModal() {
                   Change
                 </button>
               </div>
+            ) : busy && status ? (
+              <div className="w-full aspect-[4/5] rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center p-6">
+                <UploadProgress status={status} onCancel={() => abortRef.current?.abort()} />
+              </div>
             ) : (
               <label className="flex flex-col items-center justify-center gap-3 w-full aspect-[4/5] rounded-xl border-2 border-dashed border-slate-300 hover:border-sky-400 hover:bg-sky-50/50 cursor-pointer transition-colors">
                 <div className="flex items-center gap-3 text-sky-500">
@@ -239,7 +290,7 @@ export default function CreateStoryModal() {
                 <input
                   ref={inputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                  accept={`image/jpeg,image/png,image/webp,image/gif,${VIDEO_ACCEPT}`}
                   className="hidden"
                   onChange={event => void pickFile(event.target.files?.[0])}
                 />
@@ -254,6 +305,8 @@ export default function CreateStoryModal() {
               placeholder="Add a caption to your story..."
               className="w-full px-4 py-3 rounded-xl border border-slate-300 text-[14.5px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-500/30 focus:border-sky-500 resize-y"
             />
+
+            {busy && status && preview && <UploadProgress status={status} />}
 
             {error && (
               <p

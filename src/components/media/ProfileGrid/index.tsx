@@ -60,6 +60,7 @@ function PostGrid({ posts }: { posts: MediaPost[] }) {
                 <>
                   <video
                     src={video.url}
+                    poster={video.poster_url ?? undefined}
                     muted
                     playsInline
                     preload="metadata"

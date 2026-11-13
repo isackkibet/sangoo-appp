@@ -80,6 +80,7 @@ export default function MediaCarousel({
         >
           <video
             src={video.url}
+            poster={video.poster_url ?? undefined}
             controls
             playsInline
             preload="metadata"

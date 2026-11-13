@@ -1,3 +1,4 @@
+import { storedVideoMime } from "./videoFormat";
 export const MAX_IMAGE_BYTES = 20 * 1024 * 1024;
 export const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
 export const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
@@ -121,7 +122,7 @@ export function validateUpload(file: File, options: UploadOptions = {}): Promise
     const isVideo = VIDEO_TYPES.has(mime);
 
     if (!isImage && !isVideo) {
-      throw new Error("Upload a JPEG, PNG, WebP, GIF, MP4 or WebM file.");
+      throw new Error("Upload a photo (JPEG, PNG, WebP, GIF) or a video.");
     }
     if (isVideo && options.allowVideo === false) {
       throw new Error("This upload only accepts photos.");
@@ -168,4 +169,16 @@ export function isValidHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * The real type of a stored upload, from its first bytes. Only formats SIHU
+ * stores are recognised: JPEG/PNG/WebP/GIF images and MP4/WebM videos
+ * (everything else is converted in the browser before upload).
+ */
+export function sniffStoredMime(head: Uint8Array): string | null {
+  const buffer = Buffer.from(head.buffer, head.byteOffset, head.byteLength);
+  const image = sniff(buffer);
+  if (image && IMAGE_TYPES.has(image)) return image;
+  return storedVideoMime(head);
 }

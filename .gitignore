@@ -42,3 +42,6 @@ next-env.d.ts
 
 # separate local project not used by the Next.js app
 guardian/
+
+# FFmpeg core (copied from node_modules on install)
+/public/ffmpeg/

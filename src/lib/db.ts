@@ -96,6 +96,9 @@ const SCHEMA_STATEMENTS = [
   `ALTER TABLE media_images ADD COLUMN IF NOT EXISTS storage_path TEXT`,
   `ALTER TABLE media_images ADD COLUMN IF NOT EXISTS position INTEGER NOT NULL DEFAULT 0`,
   `ALTER TABLE media_images ADD COLUMN IF NOT EXISTS duration_ms INTEGER`,
+  // Thumbnail image for videos (generated in the browser during upload).
+  `ALTER TABLE media_images ADD COLUMN IF NOT EXISTS poster_url TEXT`,
+  `ALTER TABLE media_images ADD COLUMN IF NOT EXISTS poster_path TEXT`,
   `ALTER TABLE media_images ALTER COLUMN data DROP NOT NULL`,
   `CREATE INDEX IF NOT EXISTS idx_media_images_post ON media_images (post_id, position)`,
 
@@ -287,7 +290,7 @@ const SCHEMA_STATEMENTS = [
 let schemaReady: Promise<void> | null = null;
 
 // Bump this when SCHEMA_STATEMENTS changes so the migration runs again.
-const SCHEMA_VERSION = 20261113;
+const SCHEMA_VERSION = 20261114;
 
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {

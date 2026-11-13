@@ -1,5 +1,25 @@
 import type { NextConfig } from "next";
 
+// SIHU Media uploads go straight from the browser to this Supabase project, and
+// stored videos play from it. Videos are converted in the browser with FFmpeg
+// (WebAssembly, served from /ffmpeg), which needs 'wasm-unsafe-eval'.
+const SUPABASE_ORIGIN = (() => {
+  try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").origin; } catch { return ""; }
+})();
+
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com",
+  "worker-src 'self' blob:",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data: blob: https:",
+  `media-src 'self' blob: ${SUPABASE_ORIGIN}`.trim(),
+  `connect-src 'self' ${SUPABASE_ORIGIN}`.trim(),
+  "frame-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+].join("; ") + ";";
+
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
@@ -41,7 +61,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           {
             key: "Content-Security-Policy",
-            value: "default-src 'self'; script-src 'self' 'unsafe-inline' https://js.stripe.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-src 'none'; base-uri 'self'; form-action 'self';",
+            value: CSP,
           },
         ],
       },

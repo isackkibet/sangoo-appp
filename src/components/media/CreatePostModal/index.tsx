@@ -16,8 +16,17 @@ import {
   SERVER_UPLOAD_MAX_BYTES,
   type PreparedMedia,
 } from '@/lib/media/prepareUpload';
+import { processVideo, VideoProcessingError } from '@/lib/media/videoPipeline';
+import { VIDEO_ACCEPT } from '@/lib/media/videoFormat';
+import { uploadDirect } from '@/lib/media/directUpload';
+import UploadProgress, { type UploadStatus } from '@/components/media/UploadProgress';
 
-type Preview = PreparedMedia;
+type Preview = PreparedMedia & {
+  /** Processed videos: browser-ready MIME, thumbnail and what was done. */
+  mime?: string;
+  poster?: Blob | null;
+  note?: string;
+};
 
 export default function CreatePostModal() {
   const router = useRouter();
@@ -32,6 +41,8 @@ export default function CreatePostModal() {
   const [location, setLocation] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [status, setStatus] = useState<UploadStatus | null>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -41,7 +52,9 @@ export default function CreatePostModal() {
     setLocation('');
     setBusy(false);
     setError(null);
+    setStatus(null);
     if (inputRef.current) inputRef.current.value = '';
+    return () => abortRef.current?.abort();
   }, [isOpen]);
 
   useEffect(() => {
@@ -66,13 +79,51 @@ export default function CreatePostModal() {
   const pickFile = async (file: File | undefined) => {
     if (!file) return;
     setError(null);
+    if (file.type.startsWith('image/')) {
+      try {
+        setPreview(await prepareMedia(file));
+      } catch (err) {
+        setPreview(null);
+        setError(err instanceof Error ? err.message : 'Could not read that file.');
+      }
+      return;
+    }
+    // Anything else is treated as a video and identified by its contents.
+    const controller = new AbortController();
+    abortRef.current = controller;
+    setBusy(true);
+    setPreview(null);
     try {
-      setPreview(await prepareMedia(file));
+      const v = await processVideo(file, p => setStatus({ label: p.message, ratio: p.ratio }), controller.signal);
+      const what = `${v.probe.containerLabel}${v.probe.codecs.video ? ` · ${v.probe.codecs.video}` : ''}${v.probe.codecs.audio ? ` + ${v.probe.codecs.audio}` : ''}`;
+      setPreview({
+        file: v.file,
+        previewUrl: URL.createObjectURL(v.file),
+        width: v.width,
+        height: v.height,
+        kind: 'video',
+        durationMs: v.durationMs,
+        mime: v.mime,
+        poster: v.poster,
+        note: v.action === 'kept'
+          ? `${what} — uploads as-is, original quality`
+          : v.action === 'remuxed'
+            ? `${what} — repackaged to MP4 without re-encoding`
+            : `${what} — converted to MP4 (H.264) for every browser`,
+      });
     } catch (err) {
-      setPreview(null);
-      setError(err instanceof Error ? err.message : 'Could not read that file.');
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setError(err instanceof VideoProcessingError || err instanceof Error ? err.message : 'Could not process that video.');
+      }
+    } finally {
+      setBusy(false);
+      setStatus(null);
+      abortRef.current = null;
+      if (inputRef.current) inputRef.current.value = '';
     }
   };
+
+  const cancelProcessing = () => abortRef.current?.abort();
 
   const share = async () => {
     if (!preview || busy) return;
@@ -81,7 +132,38 @@ export default function CreatePostModal() {
 
     try {
       let res: Response;
-      if (preview.file.size <= SERVER_UPLOAD_MAX_BYTES) {
+      if (preview.kind === 'video') {
+        // Processed video → storage (with progress) → thumbnail → post.
+        const controller = new AbortController();
+        abortRef.current = controller;
+        const mime = preview.mime ?? preview.file.type;
+        const video = await uploadDirect(preview.file, mime, 'posts', r => setStatus({ label: 'Uploading video…', ratio: r }), controller.signal);
+        let posterPath: string | null = null;
+        if (preview.poster) {
+          setStatus({ label: 'Uploading thumbnail…' });
+          posterPath = await uploadDirect(preview.poster, 'image/jpeg', 'posts', undefined, controller.signal).then(r => r.path).catch(() => null);
+        }
+        setStatus({ label: 'Publishing…' });
+        res = await fetch('/api/media/posts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caption,
+            category,
+            locationName: location,
+            media: [{
+              path: video.path,
+              posterPath,
+              mime,
+              kind: 'video',
+              width: preview.width,
+              height: preview.height,
+              durationMs: preview.durationMs,
+              altText: caption,
+            }],
+          }),
+        });
+      } else if (preview.file.size <= SERVER_UPLOAD_MAX_BYTES) {
         const form = new FormData();
         form.append('media', preview.file);
         form.append('width', String(preview.width));
@@ -162,9 +244,13 @@ export default function CreatePostModal() {
       close();
       router.push('/media/feed');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not share your post.');
+      if (!(err instanceof DOMException && err.name === 'AbortError')) {
+        setError(err instanceof Error ? err.message : 'Could not share your post.');
+      }
     } finally {
       setBusy(false);
+      setStatus(null);
+      abortRef.current = null;
     }
   };
 
@@ -234,6 +320,10 @@ export default function CreatePostModal() {
                   Change
                 </button>
               </div>
+            ) : busy && status ? (
+              <div className="w-full aspect-square rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center p-6">
+                <UploadProgress status={status} onCancel={cancelProcessing} />
+              </div>
             ) : (
               <label className="flex flex-col items-center justify-center gap-3 w-full aspect-square rounded-xl border-2 border-dashed border-slate-300 hover:border-sky-400 hover:bg-sky-50/50 cursor-pointer transition-colors">
                 <div className="flex items-center gap-3 text-sky-500">
@@ -241,11 +331,11 @@ export default function CreatePostModal() {
                   <Film size={38} />
                 </div>
                 <span className="text-[15px] font-semibold text-slate-800">Choose a photo or video</span>
-                <span className="text-[12.5px] text-slate-500">JPEG, PNG, WebP, MP4 or WebM</span>
+                <span className="text-[12.5px] text-slate-500 text-center px-6">Photos: JPEG, PNG, WebP, GIF · Videos: MP4, MOV, WebM, MKV, AVI, M4V, 3GP, MPEG, WMV, FLV, TS</span>
                 <input
                   ref={inputRef}
                   type="file"
-                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/webm"
+                  accept={`image/jpeg,image/png,image/webp,image/gif,${VIDEO_ACCEPT}`}
                   className="hidden"
                   onChange={e => void pickFile(e.target.files?.[0])}
                 />
@@ -288,6 +378,12 @@ export default function CreatePostModal() {
                 </span>
               </label>
             </div>
+
+            {preview?.note && (
+              <p className="text-[12.5px] text-slate-500 -mt-1">{preview.note}</p>
+            )}
+
+            {busy && status && preview && <UploadProgress status={status} />}
 
             {error && (
               <p role="alert" className="flex items-start gap-2 p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-[13.5px] leading-relaxed">

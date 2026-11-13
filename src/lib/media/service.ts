@@ -56,7 +56,7 @@ const POST_FIELDS = `
       'id', m.id, 'kind', m.kind,
       'url', COALESCE(NULLIF(m.url, ''), '/api/media/images/' || m.id),
       'width', m.width, 'height', m.height, 'alt_text', m.alt_text,
-      'duration_ms', m.duration_ms, 'position', m.position
+      'duration_ms', m.duration_ms, 'position', m.position, 'poster_url', m.poster_url
     ) ORDER BY m.position, m.created_at), '[]'::json)
    FROM media_images m WHERE m.post_id = p.id) AS media,
   (SELECT COALESCE(json_agg(pt.tag ORDER BY pt.tag), '[]'::json)
@@ -289,6 +289,9 @@ export interface NewMediaInput {
   height: number;
   durationMs: number | null;
   altText: string;
+  /** Video thumbnail (public URL + storage reference). */
+  posterUrl?: string | null;
+  posterPath?: string | null;
 }
 
 export interface CreatePostInput {
@@ -404,8 +407,8 @@ export async function createPost(
   for (const media of input.media) {
     await sql.query(
       `INSERT INTO media_images
-         (id, post_id, kind, mime, data, width, height, alt_text, url, storage_path, position, duration_ms)
-       VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11)`,
+         (id, post_id, kind, mime, data, width, height, alt_text, url, storage_path, position, duration_ms, poster_url, poster_path)
+       VALUES ($1, $2, $3, $4, NULL, $5, $6, $7, $8, $9, $10, $11, $12, $13)`,
       [
         randomUUID(),
         postId,
@@ -418,6 +421,8 @@ export async function createPost(
         media.storagePath,
         position,
         media.durationMs,
+        media.posterUrl ?? null,
+        media.posterPath ?? null,
       ],
     );
     position += 1;
@@ -467,9 +472,9 @@ export async function deletePost(
   if (!isAdmin && rows[0].user_id !== userId) throw new Error("You cannot delete this post.");
 
   const media = (await sql.query(
-    "SELECT storage_path FROM media_images WHERE post_id = $1",
+    "SELECT storage_path, poster_path FROM media_images WHERE post_id = $1",
     [postId],
-  )) as { storage_path: string | null }[];
+  )) as { storage_path: string | null; poster_path: string | null }[];
 
   const captionRows = (await sql.query(
     "SELECT caption FROM media_posts WHERE id = $1",
@@ -477,7 +482,7 @@ export async function deletePost(
   )) as { caption: string }[];
   await syncHashtags(postId, captionRows[0]?.caption ?? "", -1);
   await sql.query("DELETE FROM media_posts WHERE id = $1", [postId]);
-  await Promise.all(media.map((m) => removeMedia(m.storage_path)));
+  await Promise.all(media.flatMap((m) => [removeMedia(m.storage_path), removeMedia(m.poster_path)]));
   await invalidateMediaCache();
   return true;
 }
