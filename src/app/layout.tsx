@@ -3,6 +3,7 @@ import { Inter, Merriweather, Plus_Jakarta_Sans } from "next/font/google";
 import Link from "next/link";
 import "./globals.css";
 import SihuAuthProvider from "@/components/auth/SihuAuth";
+import SihuLogo from "@/components/brand/SihuLogo";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -84,6 +85,9 @@ export default function RootLayout({
           <div className="container mx-auto px-4 lg:px-8">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-16">
                <div className="md:col-span-2">
+                  <Link href="/" aria-label="Sango Information Hub (SIHU) — home" className="inline-block mb-6">
+                    <SihuLogo variant="full" onDark alt="" className="h-11 sm:h-12" />
+                  </Link>
                   <h3 className="font-heading font-bold text-2xl mb-5 text-white">Sango Information Hub</h3>
                   <p className="text-slate-400 text-lg font-light leading-relaxed max-w-md">
                     A registered community media initiative for knowledge, environmental protection and development across the Lake Victoria Basin.

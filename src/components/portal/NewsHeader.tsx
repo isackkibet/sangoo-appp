@@ -33,7 +33,7 @@ export default function NewsHeader() {
         <div className="flex items-center justify-between h-[72px] gap-4">
           {/* Logo */}
           <Link href="/portal" className="flex items-center gap-3 shrink-0" aria-label="Sango Information Hub news">
-            <Image src="/images/logo-main.png" alt="Sango Information Hub" width={140} height={40} className="h-9 md:h-10 w-auto object-contain" priority />
+            <Image src="/images/logo-main.png" alt="Sango Information Hub" width={140} height={40} className="h-11 md:h-12 w-auto object-contain" priority />
             <span className="hidden md:block h-8 w-px bg-slate-200" />
             <span className="hidden md:block leading-tight">
               <span className="block text-[13px] font-bold text-slate-900">Sango Information Hub</span>
