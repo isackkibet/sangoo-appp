@@ -23,28 +23,28 @@ export default function ArticleCard({ article, language, variant = "row" }: Prop
     return (
       <Link
         href={article.href}
-        className="group flex w-[240px] shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--ai-border)] bg-[var(--ai-surface)] transition-colors hover:border-[var(--ai-primary)]/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
+        className="group flex w-[200px] shrink-0 flex-col overflow-hidden rounded-xl border border-[var(--ai-border)] bg-[var(--ai-surface)] transition-colors hover:border-[var(--ai-primary)]/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
       >
-        <span className="relative block h-28 w-full overflow-hidden bg-[var(--ai-surface-2)]">
+        <span className="relative block h-20 w-full overflow-hidden bg-[var(--ai-surface-2)]">
           <Image
             src={failed || !article.image ? FALLBACK : article.image}
             alt=""
             fill
-            sizes="240px"
+            sizes="200px"
             className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
             onError={() => setFailed(true)}
           />
         </span>
-        <span className="flex flex-1 flex-col p-3">
+        <span className="flex flex-1 flex-col p-2">
           {article.category && (
-            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--ai-primary)]">
+            <span className="text-[9px] font-bold uppercase tracking-[0.06em] text-[var(--ai-primary)]">
               {article.category}
             </span>
           )}
-          <span className="mt-1 line-clamp-2 text-[13.5px] font-semibold leading-snug text-[var(--ai-text)]">
+          <span className="mt-0.5 line-clamp-2 text-[12px] font-semibold leading-snug text-[var(--ai-text)]">
             {article.title}
           </span>
-          <span className="mt-auto inline-flex items-center gap-1 pt-2 text-[12px] font-semibold text-[var(--ai-primary)]">
+          <span className="mt-auto inline-flex items-center gap-1 pt-1 text-[11px] font-semibold text-[var(--ai-primary)]">
             {t.read} <ArrowRight size={12} aria-hidden="true" />
           </span>
         </span>
