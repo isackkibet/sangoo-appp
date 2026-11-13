@@ -89,7 +89,7 @@ export default async function ArticlePage({ params }: PageProps) {
   });
 
   return (
-    <div className="bg-white min-h-screen selection:bg-primary/20 selection:text-slate-900">
+    <div className="bg-white min-h-screen pt-[72px] selection:bg-primary/20 selection:text-slate-900">
       {/* Top reading progress bar */}
       <ArticleProgress />
 
@@ -165,7 +165,8 @@ export default async function ArticlePage({ params }: PageProps) {
         </header>
 
         {/* Hero image */}
-        <figure className="my-12 relative rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shadow-sm dark:shadow-none">
+        {/* The frame needs a size: the image uses `fill`, so without an aspect ratio it spread over the whole page. */}
+        <figure className="my-12 relative w-full aspect-[16/9] max-h-[640px] rounded-xl overflow-hidden border border-slate-200 bg-slate-100 dark:border-slate-800 shadow-sm dark:shadow-none">
           <Image
             src={article.image}
             alt={article.title}

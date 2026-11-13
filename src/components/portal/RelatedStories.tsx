@@ -35,7 +35,8 @@ export default function RelatedStories({ articles, currentId, language = "en" }:
             href={`/portal/article/${article.id}`}
             className="flex gap-4 rounded-xl border border-slate-100 p-4 hover:border-primary/30 hover:bg-slate-50 hover:shadow-sm transition-colors dark:border-slate-800 dark:hover:bg-slate-800/50"
           >
-            <div className="flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800">
+            {/* `relative` keeps the `fill` thumbnail inside this box (without it the picture covered the whole page) */}
+            <div className="relative flex-shrink-0 w-24 h-24 rounded-lg overflow-hidden bg-slate-100 dark:bg-slate-800">
               <Image
                 src={article.image}
                 alt=""
