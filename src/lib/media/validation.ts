@@ -34,6 +34,10 @@ export function asBool(value: unknown): boolean {
 }
 
 export function clampInt(value: unknown, min: number, max: number, fallback: number): number {
+  // A missing value (null / "" from an absent query parameter) must use the
+  // fallback. Number(null) is 0, which used to clamp `limit` to 1, so the
+  // feed only ever showed a single post.
+  if (value === null || value === undefined || (typeof value === "string" && value.trim() === "")) return fallback;
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
   return Math.min(Math.max(Math.round(n), min), max);

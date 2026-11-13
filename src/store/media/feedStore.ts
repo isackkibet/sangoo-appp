@@ -3,12 +3,21 @@
 import { create } from 'zustand';
 import type { MediaPost } from '@/lib/media/mockData';
 
+export type FeedScope = 'for-you' | 'following';
+const PAGE = 12;
+
 interface FeedState {
   posts: MediaPost[];
+  /** 'for-you' = everyone's public posts; 'following' = people you follow. */
+  scope: FeedScope;
+  nextCursor: number | null;
   loading: boolean;
+  loadingMore: boolean;
   loaded: boolean;
   error: string | null;
   load: (force?: boolean) => Promise<void>;
+  loadMore: () => Promise<void>;
+  setScope: (scope: FeedScope) => void;
   prepend: (post: MediaPost) => void;
   removePost: (postId: string) => Promise<void>;
   toggleLike: (post: MediaPost) => Promise<void>;
@@ -21,25 +30,53 @@ function replacePost(posts: MediaPost[], id: string, patch: Partial<MediaPost>):
 
 export const useMediaFeedStore = create<FeedState>((set, get) => ({
   posts: [],
+  scope: 'for-you',
+  nextCursor: null,
   loading: false,
+  loadingMore: false,
   loaded: false,
   error: null,
 
   load: async (force = false) => {
-    const { loading, loaded } = get();
+    const { loading, loaded, scope } = get();
     if (loading || (loaded && !force)) return;
 
     set({ loading: true, error: null });
     try {
-      const res = await fetch('/api/media/posts', { cache: 'no-store' });
-      const data = (await res.json()) as { posts?: MediaPost[]; error?: string };
+      const res = await fetch(`/api/media/posts?scope=${scope}&limit=${PAGE}`, { cache: 'no-store' });
+      const data = (await res.json()) as { posts?: MediaPost[]; nextCursor?: number | null; error?: string };
       if (!res.ok) throw new Error(data.error || 'Could not load the feed.');
-      set({ posts: data.posts ?? [], loaded: true });
+      if (get().scope !== scope) return; // the tab changed while loading
+      set({ posts: data.posts ?? [], nextCursor: data.nextCursor ?? null, loaded: true });
     } catch (error) {
       set({ error: error instanceof Error ? error.message : 'Could not load the feed.' });
     } finally {
       set({ loading: false });
     }
+  },
+
+  // Next page of posts when the reader reaches the end of the list.
+  loadMore: async () => {
+    const { loading, loadingMore, nextCursor, scope } = get();
+    if (loading || loadingMore || nextCursor === null) return;
+    set({ loadingMore: true });
+    try {
+      const res = await fetch(`/api/media/posts?scope=${scope}&limit=${PAGE}&cursor=${nextCursor}`, { cache: 'no-store' });
+      const data = (await res.json()) as { posts?: MediaPost[]; nextCursor?: number | null };
+      if (!res.ok || get().scope !== scope) return;
+      set(state => {
+        const ids = new Set(state.posts.map(p => p.id));
+        return { posts: [...state.posts, ...(data.posts ?? []).filter(p => !ids.has(p.id))], nextCursor: data.nextCursor ?? null };
+      });
+    } finally {
+      set({ loadingMore: false });
+    }
+  },
+
+  setScope: (scope) => {
+    if (get().scope === scope) return;
+    set({ scope, posts: [], nextCursor: null, loaded: false, loading: false, error: null });
+    void get().load();
   },
 
   prepend: (post) =>
