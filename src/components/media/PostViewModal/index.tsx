@@ -165,8 +165,8 @@ export default function PostViewModal() {
               className="rounded-full object-cover ring-2 ring-sky-300"
             />
             <div className="flex-1 min-w-0">
-              <p className="text-[14px] font-semibold text-slate-900 flex items-center gap-1">
-                {post.user.username}
+              <p className="text-[14px] font-semibold text-slate-900 flex items-center gap-1" title={`@${post.user.username}`}>
+                {post.user.full_name || post.user.username}
                 {post.user.is_verified && <BadgeCheck size={13} className="text-sky-500" />}
               </p>
               {post.location_name && (
@@ -216,7 +216,7 @@ export default function PostViewModal() {
                 />
                 <div>
                   <p className="text-[13px] text-slate-800">
-                    <span className="font-semibold mr-1">{post.user.username}</span>
+                    <span className="font-semibold mr-1">{post.user.full_name || post.user.username}</span>
                     {post.caption}
                   </p>
                   <p className="text-[11px] text-slate-400 mt-1">{timeAgo(post.created_at)}</p>

@@ -17,7 +17,7 @@ export default function ShareMenu({ post, onClose, align = 'left' }: { post: Med
   const canNative = typeof navigator !== 'undefined' && typeof navigator.share === 'function';
 
   const url = typeof window !== 'undefined' ? `${window.location.origin}/media/feed?post=${encodeURIComponent(post.id)}` : '';
-  const text = post.caption ? `${post.caption.slice(0, 120)} — @${post.user.username} on SIHU Media` : `@${post.user.username} on SIHU Media`;
+  const text = post.caption ? `${post.caption.slice(0, 120)} — ${post.user.full_name || post.user.username} on SIHU Media` : `${post.user.full_name || post.user.username} on SIHU Media`;
 
   useEffect(() => {
     const onDown = (e: PointerEvent) => { if (!boxRef.current?.contains(e.target as Node)) onClose(); };

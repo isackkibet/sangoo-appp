@@ -146,8 +146,8 @@ export default function MediaPostCard({ post }: Props) {
             className="rounded-full object-cover ring-2 ring-sky-300 shrink-0"
           />
           <div className="min-w-0">
-            <p className="text-[14px] font-semibold text-slate-900 leading-tight flex items-center gap-1 truncate">
-              {post.user.username}
+            <p className="text-[14px] font-semibold text-slate-900 leading-tight flex items-center gap-1 truncate" title={`@${post.user.username}`}>
+              {post.user.full_name || post.user.username}
               {post.user.is_verified && <BadgeCheck size={12} className="text-sky-500 shrink-0" />}
             </p>
             <p className="text-[11px] text-slate-500 leading-tight">
@@ -267,7 +267,7 @@ export default function MediaPostCard({ post }: Props) {
             href="/media/profile"
             className="font-semibold mr-1 hover:underline"
           >
-            {post.user.username}
+            {post.user.full_name || post.user.username}
           </Link>
           {post.caption}
         </p>
