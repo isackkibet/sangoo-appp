@@ -47,6 +47,8 @@ const POST_FIELDS = `
   (SELECT COUNT(*)::int FROM media_likes ml WHERE ml.post_id = p.id) AS like_count,
   (SELECT COUNT(*)::int FROM media_comments mc WHERE mc.post_id = p.id) AS comment_count,
   (SELECT COUNT(*)::int FROM media_reposts mr WHERE mr.post_id = p.id) AS repost_count,
+  (SELECT COUNT(*)::int FROM media_post_shares msh WHERE msh.post_id = p.id) AS share_count,
+  (SELECT COUNT(*)::int FROM media_post_views mpv WHERE mpv.post_id = p.id) AS view_count,
   EXISTS(SELECT 1 FROM media_likes ml WHERE ml.post_id = p.id AND ml.user_id = $1) AS is_liked,
   EXISTS(SELECT 1 FROM media_reposts mr WHERE mr.post_id = p.id AND mr.user_id = $1) AS is_reposted,
   EXISTS(SELECT 1 FROM media_saves ms WHERE ms.post_id = p.id AND ms.user_id = $1) AS is_saved,
@@ -119,6 +121,8 @@ function rowToPost(row: Row, viewerId: string | null): MediaPost {
     like_count: Number(row.like_count) || 0,
     comment_count: Number(row.comment_count) || 0,
     repost_count: Number(row.repost_count) || 0,
+    share_count: Number(row.share_count) || 0,
+    view_count: Number(row.view_count) || 0,
     images,
     videos,
     user: {
@@ -483,10 +487,8 @@ export async function toggleLike(
   userId: string,
 ): Promise<{ liked: boolean; likeCount: number } | null> {
   const sql = getSql();
-  const postRows = (await sql.query(
-    "SELECT user_id, hide_likes FROM media_posts WHERE id = $1 LIMIT 1",
-    [postId],
-  )) as { user_id: string; hide_likes: boolean }[];
+  // Only posts this member is allowed to see (privacy and follower rules).
+  const postRows = await visiblePostOwner(postId, userId);
   if (!postRows[0]) return null;
 
   const existing = (await sql.query(
@@ -524,8 +526,7 @@ export async function toggleSave(
   userId: string,
 ): Promise<{ saved: boolean } | null> {
   const sql = getSql();
-  const exists = (await sql.query("SELECT 1 FROM media_posts WHERE id = $1 LIMIT 1", [postId])) as unknown[];
-  if (!exists[0]) return null;
+  if (!(await visiblePostOwner(postId, userId))[0]) return null;
   const existing = (await sql.query(
     "SELECT 1 FROM media_saves WHERE post_id = $1 AND user_id = $2 LIMIT 1",
     [postId, userId],
@@ -548,10 +549,7 @@ export async function toggleRepost(
   userId: string,
 ): Promise<{ reposted: boolean; repostCount: number } | null> {
   const sql = getSql();
-  const postRows = (await sql.query(
-    "SELECT user_id FROM media_posts WHERE id = $1 LIMIT 1",
-    [postId],
-  )) as { user_id: string }[];
+  const postRows = await visiblePostOwner(postId, userId);
   if (!postRows[0]) return null;
 
   const existing = (await sql.query(
@@ -581,6 +579,132 @@ export async function toggleRepost(
   )) as { count: number }[];
   await invalidateMediaCache();
   return { reposted: existing.length === 0, repostCount: Number(rows[0]?.count) || 0 };
+}
+
+// ── Engagement: visibility, shares, views, live counts ───────────────────────
+
+/** The post's owner if `viewerId` may see the post (same rules as the feed); [] otherwise. */
+async function visiblePostOwner(postId: string, viewerId: string | null): Promise<{ user_id: string }[]> {
+  const sql = getSql();
+  return (await sql.query(
+    `SELECT p.user_id FROM media_posts p
+     JOIN users u ON u.id = p.user_id
+     WHERE p.id = $2 AND u.is_suspended = FALSE ${VISIBILITY}
+     LIMIT 1`,
+    [viewerId ?? "", postId],
+  )) as { user_id: string }[];
+}
+
+export const SHARE_CHANNELS = ["native", "link", "whatsapp", "x", "facebook", "telegram"] as const;
+export type ShareChannel = (typeof SHARE_CHANNELS)[number];
+
+/**
+ * Record a share. The same member sharing the same post on the same channel
+ * again within an hour is not counted twice.
+ */
+export async function recordShare(
+  postId: string,
+  userId: string,
+  channel: ShareChannel,
+): Promise<{ recorded: boolean; shareCount: number } | null> {
+  const sql = getSql();
+  if (!(await visiblePostOwner(postId, userId))[0]) return null;
+
+  const rows = (await sql.query(
+    `INSERT INTO media_post_shares (id, post_id, user_id, channel)
+     SELECT $1, $2, $3, $4
+     WHERE NOT EXISTS (
+       SELECT 1 FROM media_post_shares
+       WHERE post_id = $2 AND user_id = $3 AND channel = $4
+         AND created_at > NOW() - INTERVAL '1 hour'
+     )
+     RETURNING id`,
+    [randomUUID(), postId, userId, channel],
+  )) as unknown[];
+
+  const count = (await sql.query(
+    "SELECT COUNT(*)::int AS count FROM media_post_shares WHERE post_id = $1",
+    [postId],
+  )) as { count: number }[];
+  return { recorded: rows.length > 0, shareCount: Number(count[0]?.count) || 0 };
+}
+
+/**
+ * Record a genuine view: one per viewer per post per day. The author's own
+ * views are never counted. `viewerKey` is "u:<user id>" for members or a
+ * salted hash for visitors who are not signed in.
+ */
+export async function recordView(
+  postId: string,
+  viewerKey: string,
+  userId: string | null,
+): Promise<{ counted: boolean; viewCount: number } | null> {
+  const sql = getSql();
+  const owner = (await visiblePostOwner(postId, userId))[0];
+  if (!owner) return null;
+
+  let counted = false;
+  if (owner.user_id !== userId) {
+    const rows = (await sql.query(
+      `INSERT INTO media_post_views (post_id, viewer_key, user_id)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (post_id, viewer_key, view_date) DO NOTHING
+       RETURNING post_id`,
+      [postId, viewerKey, userId],
+    )) as unknown[];
+    counted = rows.length > 0;
+  }
+
+  const count = (await sql.query(
+    "SELECT COUNT(*)::int AS count FROM media_post_views WHERE post_id = $1",
+    [postId],
+  )) as { count: number }[];
+  return { counted, viewCount: Number(count[0]?.count) || 0 };
+}
+
+export interface PostStats {
+  id: string;
+  like_count: number;
+  comment_count: number;
+  repost_count: number;
+  share_count: number;
+  view_count: number;
+  is_liked: boolean;
+  is_reposted: boolean;
+  is_saved: boolean;
+}
+
+/** Current counts for several posts at once (only posts the viewer may see). */
+export async function postStats(ids: string[], viewerId: string | null): Promise<PostStats[]> {
+  const unique = [...new Set(ids)].slice(0, 50);
+  if (unique.length === 0) return [];
+  const sql = getSql();
+  const rows = (await sql.query(
+    `SELECT p.id,
+       (SELECT COUNT(*)::int FROM media_likes ml WHERE ml.post_id = p.id) AS like_count,
+       (SELECT COUNT(*)::int FROM media_comments mc WHERE mc.post_id = p.id) AS comment_count,
+       (SELECT COUNT(*)::int FROM media_reposts mr WHERE mr.post_id = p.id) AS repost_count,
+       (SELECT COUNT(*)::int FROM media_post_shares msh WHERE msh.post_id = p.id) AS share_count,
+       (SELECT COUNT(*)::int FROM media_post_views mpv WHERE mpv.post_id = p.id) AS view_count,
+       EXISTS(SELECT 1 FROM media_likes ml WHERE ml.post_id = p.id AND ml.user_id = $1) AS is_liked,
+       EXISTS(SELECT 1 FROM media_reposts mr WHERE mr.post_id = p.id AND mr.user_id = $1) AS is_reposted,
+       EXISTS(SELECT 1 FROM media_saves ms WHERE ms.post_id = p.id AND ms.user_id = $1) AS is_saved
+     FROM media_posts p
+     JOIN users u ON u.id = p.user_id
+     WHERE p.id = ANY($2) AND u.is_suspended = FALSE ${VISIBILITY}`,
+    [viewerId ?? "", unique],
+  )) as Row[];
+  return rows.map((r) => ({
+    id: String(r.id),
+    like_count: Number(r.like_count) || 0,
+    comment_count: Number(r.comment_count) || 0,
+    repost_count: Number(r.repost_count) || 0,
+    share_count: Number(r.share_count) || 0,
+    view_count: Number(r.view_count) || 0,
+    is_liked: Boolean(r.is_liked),
+    is_reposted: Boolean(r.is_reposted),
+    is_saved: Boolean(r.is_saved),
+  }));
 }
 
 // ── Comments ────────────────────────────────────────────────────────────────
@@ -613,6 +737,8 @@ export async function listComments(
   postId: string,
   viewerId: string | null,
 ): Promise<MediaComment[]> {
+  // Comments on posts the viewer can't see stay private.
+  if (!(await visiblePostOwner(postId, viewerId))[0]) return [];
   const sql = getSql();
   const rows = (await sql.query(
     `SELECT c.id, c.content, c.created_at, c.parent_id,
@@ -652,9 +778,13 @@ export async function addComment(
   if (!content) throw new Error("Write a comment first.");
 
   const sql = getSql();
+  // Members can only comment on posts they are allowed to see.
   const postRows = (await sql.query(
-    "SELECT user_id, comments_off FROM media_posts WHERE id = $1 LIMIT 1",
-    [postId],
+    `SELECT p.user_id, p.comments_off FROM media_posts p
+     JOIN users u ON u.id = p.user_id
+     WHERE p.id = $2 AND u.is_suspended = FALSE ${VISIBILITY}
+     LIMIT 1`,
+    [userId, postId],
   )) as { user_id: string; comments_off: boolean }[];
   if (!postRows[0]) throw new Error("Post not found.");
   if (postRows[0].comments_off) throw new Error("Comments are turned off for this post.");

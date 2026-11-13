@@ -53,6 +53,10 @@ export interface MediaPost {
   like_count: number;
   comment_count: number;
   repost_count?: number;
+  /** Recorded shares (link copied / sent to WhatsApp, X, ...). */
+  share_count?: number;
+  /** Genuine views: one per viewer per day, the author's own views excluded. */
+  view_count?: number;
   images: MediaImage[];
   videos: MediaImage[];
   user: MediaUser;

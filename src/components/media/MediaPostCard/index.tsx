@@ -2,11 +2,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
-  Heart, MessageCircle, Repeat2, Send, Bookmark,
+  Heart, MessageCircle, Repeat2, Send, Bookmark, Eye,
   MoreHorizontal, MapPin, BadgeCheck, Trash2,
 } from 'lucide-react';
+import ShareMenu from '@/components/media/ShareMenu';
 import MediaCarousel from '@/components/media/MediaCarousel';
 import { usePostViewStore } from '@/store/media/modalStores';
 import { useMediaFeedStore } from '@/store/media/feedStore';
@@ -19,8 +20,11 @@ function timeAgo(iso: string) {
   return `${Math.floor(h / 24)}d`;
 }
 
-function formatCount(n: number) {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+/** 999 · 1.2k · 3.4M — every number is a real count from the database. */
+export function formatCount(n: number) {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1).replace(/.0$/, '')}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/.0$/, '')}k`;
+  return String(n);
 }
 
 // Cap extreme aspect ratios to a sensible range — prevents portrait images
@@ -41,6 +45,10 @@ export default function MediaPostCard({ post }: Props) {
   const toggleLike = useMediaFeedStore(s => s.toggleLike);
   const toggleRepost = useMediaFeedStore(s => s.toggleRepost);
   const removePost = useMediaFeedStore(s => s.removePost);
+  const toggleSave = useMediaFeedStore(s => s.toggleSave);
+  const recordView = useMediaFeedStore(s => s.recordView);
+  const [shareOpen, setShareOpen] = useState(false);
+  const articleRef = useRef<HTMLElement>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [localLiked, setLocalLiked] = useState(post.is_liked);
@@ -54,6 +62,36 @@ export default function MediaPostCard({ post }: Props) {
   const likeCount = real ? post.like_count : localLikeCount;
   const reposted = real ? Boolean(post.is_reposted) : localReposted;
   const repostCount = real ? post.repost_count ?? 0 : localRepostCount;
+  const isSaved = real ? Boolean(post.is_saved) : saved;
+  const shareCount = post.share_count ?? 0;
+  const viewCount = post.view_count ?? 0;
+  // Authors who hid likes still see their own count.
+  const showLikeCount = !post.hide_likes || Boolean(post.is_owner);
+
+  // A genuine view: at least 60% of the post on screen for 1.5 seconds.
+  useEffect(() => {
+    const el = articleRef.current;
+    if (!real || !el) return;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          timer ??= setTimeout(() => { recordView(post.id); observer.disconnect(); }, 1500);
+        } else if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      { threshold: 0.6 },
+    );
+    observer.observe(el);
+    return () => { observer.disconnect(); if (timer) clearTimeout(timer); };
+  }, [real, post.id, recordView]);
+
+  const handleSave = () => {
+    if (real) { void toggleSave(post); return; }
+    setSaved(v => !v);
+  };
 
   const handleLike = () => {
     if (real) {
@@ -96,7 +134,7 @@ export default function MediaPostCard({ post }: Props) {
   );
 
   return (
-    <article className="border-b border-slate-100 pb-4">
+    <article ref={articleRef} className="border-b border-slate-100 pb-4">
       {/* Header */}
       <div className="flex items-center justify-between px-3 sm:px-1 pt-4 pb-3">
         <Link href="/media/profile" className="flex items-center gap-2.5">
@@ -158,55 +196,72 @@ export default function MediaPostCard({ post }: Props) {
         onClick={openPost}
       />
 
-      {/* Actions */}
-      <div className="flex items-center gap-0.5 px-2 sm:px-1 mt-1.5">
+      {/* Actions — each count is real recorded activity */}
+      <div className="flex items-center gap-0.5 px-1.5 sm:px-0 mt-1.5 text-slate-600">
         <button
           onClick={handleLike}
-          className={`p-2 rounded-full transition-all active:scale-90 ${
-            liked ? 'text-red-500' : 'text-slate-500'
+          aria-pressed={liked}
+          aria-label={liked ? 'Unlike' : 'Like'}
+          className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full transition-all active:scale-90 hover:bg-slate-50 ${
+            liked ? 'text-red-500' : ''
           }`}
         >
-          <Heart size={22} fill={liked ? 'currentColor' : 'none'} strokeWidth={1.8} />
+          <Heart size={21} fill={liked ? 'currentColor' : 'none'} strokeWidth={1.8} />
+          {showLikeCount && <span className="text-[13px] font-semibold tabular-nums">{formatCount(likeCount)}</span>}
         </button>
         <button
           onClick={openPost}
-          className="p-2 rounded-full text-slate-500 active:scale-90 transition-all"
+          aria-label={`Comments (${post.comment_count})`}
+          className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full active:scale-90 transition-all hover:bg-slate-50"
         >
-          <MessageCircle size={22} strokeWidth={1.8} />
+          <MessageCircle size={21} strokeWidth={1.8} />
+          <span className="text-[13px] font-semibold tabular-nums">{formatCount(post.comment_count)}</span>
         </button>
         <button
           onClick={handleRepost}
-          className={`p-2 rounded-full active:scale-90 transition-all ${
-            reposted ? 'text-emerald-600' : 'text-slate-500'
+          aria-pressed={reposted}
+          aria-label={reposted ? 'Undo repost' : 'Repost'}
+          className={`inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full active:scale-90 transition-all hover:bg-slate-50 ${
+            reposted ? 'text-emerald-600' : ''
           }`}
         >
-          <Repeat2 size={22} strokeWidth={1.8} />
+          <Repeat2 size={21} strokeWidth={1.8} />
+          <span className="text-[13px] font-semibold tabular-nums">{formatCount(repostCount)}</span>
         </button>
-        <button className="p-2 rounded-full text-slate-500 active:scale-90 transition-all">
-          <Send size={22} strokeWidth={1.8} />
-        </button>
+        <div className="relative">
+          <button
+            onClick={() => setShareOpen(v => !v)}
+            aria-label="Share"
+            aria-expanded={shareOpen}
+            className="inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full active:scale-90 transition-all hover:bg-slate-50"
+          >
+            <Send size={20} strokeWidth={1.8} />
+            <span className="text-[13px] font-semibold tabular-nums">{formatCount(shareCount)}</span>
+          </button>
+          {shareOpen && <ShareMenu post={post} onClose={() => setShareOpen(false)} />}
+        </div>
+        <span
+          className="inline-flex items-center gap-1.5 px-2 py-1.5 text-slate-500"
+          title={`${viewCount} ${viewCount === 1 ? 'view' : 'views'}`}
+          aria-label={`${viewCount} ${viewCount === 1 ? 'view' : 'views'}`}
+        >
+          <Eye size={20} strokeWidth={1.8} />
+          <span className="text-[13px] font-semibold tabular-nums">{formatCount(viewCount)}</span>
+        </span>
         <button
-          onClick={() => setSaved(v => !v)}
-          className={`p-2 rounded-full ml-auto transition-all active:scale-90 ${
-            saved ? 'text-slate-900' : 'text-slate-500'
+          onClick={handleSave}
+          aria-pressed={isSaved}
+          aria-label={isSaved ? 'Remove from saved' : 'Save'}
+          className={`p-2 rounded-full ml-auto transition-all active:scale-90 hover:bg-slate-50 ${
+            isSaved ? 'text-slate-900' : ''
           }`}
         >
-          <Bookmark size={22} fill={saved ? 'currentColor' : 'none'} strokeWidth={1.8} />
+          <Bookmark size={21} fill={isSaved ? 'currentColor' : 'none'} strokeWidth={1.8} />
         </button>
       </div>
 
-      {/* Stats + caption */}
+      {/* Caption */}
       <div className="px-3 sm:px-1 space-y-0.5 mt-0.5">
-        {!post.hide_likes && (
-          <p className="text-[13px] font-semibold text-slate-900">
-            {formatCount(likeCount)} likes
-          </p>
-        )}
-        {repostCount > 0 && (
-          <p className="text-[12px] font-semibold text-emerald-700">
-            {formatCount(repostCount)} reshares
-          </p>
-        )}
         <p className="text-[14px] text-slate-800 leading-snug line-clamp-3">
           <Link
             href="/media/profile"

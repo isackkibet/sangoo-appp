@@ -107,6 +107,26 @@ CREATE INDEX IF NOT EXISTS idx_media_likes_post_id ON media_likes (post_id);
 CREATE INDEX IF NOT EXISTS idx_media_reposts_post_id ON media_reposts (post_id);
 CREATE INDEX IF NOT EXISTS idx_media_saves_user_id ON media_saves (user_id);
 
+-- Engagement: shares (one row per recorded share) and views (one viewer per post per day).
+CREATE TABLE IF NOT EXISTS media_post_shares (
+  id TEXT PRIMARY KEY,
+  post_id TEXT NOT NULL REFERENCES media_posts(id) ON DELETE CASCADE,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  channel TEXT NOT NULL DEFAULT 'link',
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_media_post_shares_post ON media_post_shares (post_id);
+CREATE INDEX IF NOT EXISTS idx_media_post_shares_recent ON media_post_shares (post_id, user_id, channel, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS media_post_views (
+  post_id TEXT NOT NULL REFERENCES media_posts(id) ON DELETE CASCADE,
+  viewer_key TEXT NOT NULL,
+  user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+  view_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (post_id, viewer_key, view_date)
+);
+
 CREATE TABLE IF NOT EXISTS media_comments (
   id TEXT PRIMARY KEY,
   post_id TEXT NOT NULL REFERENCES media_posts(id) ON DELETE CASCADE,

@@ -5,7 +5,10 @@ import Link from 'next/link';
 import { RefreshCw, Users, Camera } from 'lucide-react';
 import MediaPostCard from '@/components/media/MediaPostCard';
 import { useMediaFeedStore, type FeedScope } from '@/store/media/feedStore';
-import { useCreatePostStore } from '@/store/media/modalStores';
+import { useCreatePostStore, usePostViewStore } from '@/store/media/modalStores';
+import type { MediaPost } from '@/lib/media/types';
+
+const STATS_REFRESH_MS = 20_000;
 
 /*
  * The community feed, like Instagram / TikTok:
@@ -31,11 +34,32 @@ export default function PostFeed() {
   const loadMore = useMediaFeedStore(s => s.loadMore);
   const setScope = useMediaFeedStore(s => s.setScope);
   const openCreate = useCreatePostStore(s => s.open);
+  const refreshStats = useMediaFeedStore(s => s.refreshStats);
+  const openPost = usePostViewStore(s => s.open);
   const hasMore = nextCursor !== null;
 
   useEffect(() => {
     void load();
   }, [load]);
+
+  // Live counts: refresh while the feed is visible, and on returning to the tab,
+  // so every member sees the same engagement numbers without reloading.
+  useEffect(() => {
+    const tick = () => { if (document.visibilityState === 'visible') void refreshStats(); };
+    const id = setInterval(tick, STATS_REFRESH_MS);
+    document.addEventListener('visibilitychange', tick);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', tick); };
+  }, [refreshStats]);
+
+  // Shared links (/media/feed?post=<id>) open that post.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get('post');
+    if (!id) return;
+    fetch(`/api/media/posts/${encodeURIComponent(id)}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then((d: { post?: MediaPost } | null) => { if (d?.post) openPost(d.post); })
+      .catch(() => {});
+  }, [openPost]);
 
   // Fetch the next page when the reader nears the bottom.
   useEffect(() => {

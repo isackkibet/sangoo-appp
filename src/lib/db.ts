@@ -129,6 +129,30 @@ const SCHEMA_STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_media_reposts_post_id ON media_reposts (post_id)`,
   `CREATE INDEX IF NOT EXISTS idx_media_saves_user_id ON media_saves (user_id)`,
 
+  // ── Engagement: shares and views ───────────────────────────────────────
+  // One row per recorded share (link copied, WhatsApp, X, ...). Repeated
+  // shares by the same member on the same channel within an hour are not
+  // recorded again (see recordShare).
+  `CREATE TABLE IF NOT EXISTS media_post_shares (
+    id TEXT PRIMARY KEY,
+    post_id TEXT NOT NULL REFERENCES media_posts(id) ON DELETE CASCADE,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    channel TEXT NOT NULL DEFAULT 'link',
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_media_post_shares_post ON media_post_shares (post_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_media_post_shares_recent ON media_post_shares (post_id, user_id, channel, created_at DESC)`,
+  // A view = one viewer (member, or a hashed anonymous visitor) per post per
+  // day; the primary key makes repeat views on the same day impossible.
+  `CREATE TABLE IF NOT EXISTS media_post_views (
+    post_id TEXT NOT NULL REFERENCES media_posts(id) ON DELETE CASCADE,
+    viewer_key TEXT NOT NULL,
+    user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+    view_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (post_id, viewer_key, view_date)
+  )`,
+
   // ── Comments ────────────────────────────────────────────────────────────
   `CREATE TABLE IF NOT EXISTS media_comments (
     id TEXT PRIMARY KEY,
@@ -263,7 +287,7 @@ const SCHEMA_STATEMENTS = [
 let schemaReady: Promise<void> | null = null;
 
 // Bump this when SCHEMA_STATEMENTS changes so the migration runs again.
-const SCHEMA_VERSION = 20261106;
+const SCHEMA_VERSION = 20261113;
 
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {

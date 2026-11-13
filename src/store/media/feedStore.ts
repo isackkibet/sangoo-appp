@@ -22,7 +22,23 @@ interface FeedState {
   removePost: (postId: string) => Promise<void>;
   toggleLike: (post: MediaPost) => Promise<void>;
   toggleRepost: (post: MediaPost) => Promise<void>;
+  toggleSave: (post: MediaPost) => Promise<void>;
+  /** Record a share (after the share actually happened) and update the count. */
+  recordShare: (postId: string, channel: ShareChannel) => Promise<void>;
+  /** Record a genuine view once per post per browser session. */
+  recordView: (postId: string) => void;
+  /** Pull the latest counts for the loaded posts (same numbers for everyone). */
+  refreshStats: () => Promise<void>;
+  /** Update fields of a loaded post (e.g. a new comment count). */
+  patchPost: (postId: string, patch: Partial<MediaPost>) => void;
 }
+
+export type ShareChannel = 'native' | 'link' | 'whatsapp' | 'x' | 'facebook' | 'telegram';
+
+type Stats = Pick<MediaPost, 'id' | 'like_count' | 'comment_count' | 'repost_count' | 'share_count' | 'view_count' | 'is_liked' | 'is_reposted' | 'is_saved'>;
+
+// Posts already sent as viewed in this tab (the server also de-duplicates per day).
+const viewedThisSession = new Set<string>();
 
 function replacePost(posts: MediaPost[], id: string, patch: Partial<MediaPost>): MediaPost[] {
   return posts.map(p => (p.id === id ? { ...p, ...patch } : p));
@@ -148,5 +164,61 @@ export const useMediaFeedStore = create<FeedState>((set, get) => ({
     } catch {
       set({ posts: previous });
     }
+  },
+
+  toggleSave: async (post) => {
+    const optimistic = !post.is_saved;
+    set(state => ({ posts: replacePost(state.posts, post.id, { is_saved: optimistic }) }));
+    try {
+      const res = await fetch(`/api/media/posts/${post.id}/save`, { method: 'POST' });
+      if (!res.ok) throw new Error('save failed');
+      const data = (await res.json()) as { saved: boolean };
+      set(state => ({ posts: replacePost(state.posts, post.id, { is_saved: data.saved }) }));
+    } catch {
+      set(state => ({ posts: replacePost(state.posts, post.id, { is_saved: post.is_saved }) }));
+    }
+  },
+
+  recordShare: async (postId, channel) => {
+    try {
+      const res = await fetch(`/api/media/posts/${postId}/share`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ channel }),
+      });
+      if (!res.ok) return;
+      const data = (await res.json()) as { shareCount: number };
+      set(state => ({ posts: replacePost(state.posts, postId, { share_count: data.shareCount }) }));
+    } catch { /* the share itself already happened */ }
+  },
+
+  recordView: (postId) => {
+    if (viewedThisSession.has(postId)) return;
+    viewedThisSession.add(postId);
+    void fetch(`/api/media/posts/${postId}/view`, { method: 'POST' })
+      .then(r => (r.ok ? r.json() : null))
+      .then((data: { viewCount: number } | null) => {
+        if (data) set(state => ({ posts: replacePost(state.posts, postId, { view_count: data.viewCount }) }));
+      })
+      .catch(() => viewedThisSession.delete(postId));
+  },
+
+  patchPost: (postId, patch) => set(state => ({ posts: replacePost(state.posts, postId, patch) })),
+
+  refreshStats: async () => {
+    const ids = get().posts.slice(0, 50).map(p => p.id);
+    if (ids.length === 0) return;
+    try {
+      const res = await fetch(`/api/media/posts/stats?ids=${ids.join(',')}`, { cache: 'no-store' });
+      if (!res.ok) return;
+      const { stats } = (await res.json()) as { stats: Stats[] };
+      const byId = new Map(stats.map(st => [st.id, st]));
+      set(state => ({
+        posts: state.posts.map(p => {
+          const st = byId.get(p.id);
+          return st ? { ...p, ...st } : p;
+        }),
+      }));
+    } catch { /* keep the last known numbers */ }
   },
 }));
