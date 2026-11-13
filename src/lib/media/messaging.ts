@@ -269,7 +269,7 @@ export async function listNotifications(
   const rows = (await sql.query(
     `SELECT n.*, a.username AS actor_username, a.name AS actor_name,
             a.email AS actor_email, a.avatar_url AS actor_avatar,
-            (SELECT m.url FROM media_images m WHERE m.post_id = n.post_id ORDER BY m.position LIMIT 1) AS post_image
+            (SELECT COALESCE(NULLIF(m.url, ''), '/api/media/images/' || m.id) FROM media_images m WHERE m.post_id = n.post_id AND m.kind = 'image' ORDER BY m.position LIMIT 1) AS post_image
      FROM media_notifications n
      LEFT JOIN users a ON a.id = n.actor_id
      WHERE n.user_id = $1

@@ -38,7 +38,7 @@ export default function PlayLayout({ children }: { children: React.ReactNode }) 
               href="/play/predictions" 
               className={`px-6 py-3 font-bold text-sm tracking-wide rounded-t-xl transition-all border-b-2 ${pathname === '/play/predictions' ? 'bg-white/10 text-primary border-primary' : 'hover:bg-white/5 border-transparent text-slate-400'}`}
             >
-              <BarChart3 size={15} className="inline -mt-0.5 mr-1.5" />Predictions market
+              <BarChart3 size={15} className="inline -mt-0.5 mr-1.5" />Predictions
             </Link>
             <Link 
               href="/play/chess" 

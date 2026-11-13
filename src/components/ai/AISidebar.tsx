@@ -13,9 +13,9 @@ import {
   Tags,
   Trash2,
   Video,
-  Waves,
   X,
 } from "lucide-react";
+import SihuLogo from "@/components/brand/SihuLogo";
 import type { Conversation, Language, ThemeMode } from "./types";
 import { dictionary, timeAgo } from "./i18n";
 import LanguageToggle from "./LanguageToggle";
@@ -61,8 +61,8 @@ export default function AISidebar({
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-[var(--ai-surface)]">
       <div className="flex h-14 shrink-0 items-center gap-2 border-b border-[var(--ai-border)] px-4">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ai-navy)] text-white">
-          <Waves size={17} aria-hidden="true" />
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-[var(--ai-border)]">
+          <SihuLogo variant="mark" alt="" className="h-7" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-[14px] font-semibold leading-tight text-[var(--ai-text)]">SIHU AI</p>

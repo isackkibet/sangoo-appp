@@ -16,6 +16,9 @@ export type AgentKnowledgeItem = {
   type: string;
   title?: string;
   score?: number;
+  url?: string;
+  publisher?: string;
+  publishedAt?: string;
 };
 
 export type AgentChatResult = {

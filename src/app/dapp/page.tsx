@@ -5,22 +5,18 @@ import { useSihuStore } from "@/store/useSihuStore";
 import WalletConnectModal from "@/components/dapp/WalletConnectModal";
 import {
   Wallet, Copy, Check, LogOut, Cpu, Pickaxe, Droplets, ArrowLeftRight, Landmark, ArrowRight, Sprout, Store,
-  Info, TrendingUp, Users, Percent,
+  Info, TrendingUp, Users, RefreshCw,
 } from "lucide-react";
+import { useSihuStats } from "@/components/stats/SihuStatsPanel";
+import { network } from "@/services/avalancheService";
 import { KAI_URL } from "@/services/kaiHubService";
 import "./dapp.css";
 
 /*
- * SIHU DApp overview. The network is in Phase 1: balances, prices and
- * network figures are demo values, and the page says so plainly.
+ * SIHU DApp overview. The AVAX balance is read from the Avalanche network;
+ * SIHU and USDT are not on-chain yet, so they show 0. Invented prices and
+ * network figures were removed; community numbers come from /api/stats.
  */
-
-const PRICES = [
-  { s: "AVAX", p: "28.42", c: "+4.1%" },
-  { s: "USDT", p: "1.0000", c: "0.0%" },
-  { s: "SIHU", p: "0.1020", c: "+12.4%" },
-  { s: "SANGO", p: "0.0501", c: "+5.1%" },
-];
 
 const ACTIONS = [
   { name: "Mine", href: "/dapp/mine", Icon: Pickaxe, text: "Earn SIHU for verified stewardship work.", tint: "from-sky-500/20 text-sky-300" },
@@ -32,7 +28,8 @@ const ACTIONS = [
 const WALLET_NAMES: Record<string, string> = { native: "SIHU wallet", core: "Core Wallet", metamask: "MetaMask" };
 
 export default function SihuDApp() {
-  const { connected, accountId, walletType, balances, autoMineActive, toggleAutoMine, incrementSihu, disconnectWallet } = useSihuStore();
+  const { connected, accountId, walletType, balances, balanceStatus, refreshBalances, autoMineActive, toggleAutoMine, incrementSihu, disconnectWallet } = useSihuStore();
+  const { load: stats } = useSihuStats();
   const [showModal, setShowModal] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -46,8 +43,6 @@ export default function SihuDApp() {
   const copy = async () => {
     try { await navigator.clipboard.writeText(accountId); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { /* no clipboard */ }
   };
-
-  const total = balances.avax * 28.42 + balances.sihu * 0.102 + balances.usdt;
 
   return (
     <main className="relative overflow-hidden pb-24">
@@ -74,7 +69,7 @@ export default function SihuDApp() {
         </div>
 
         <p className="mt-6 flex items-start gap-2 text-[13.5px] text-amber-200/90 bg-amber-400/10 border border-amber-400/20 rounded-2xl px-4 py-3 max-w-3xl">
-          <Info size={16} className="shrink-0 mt-0.5" /> Demo version: balances, prices and network figures below are sample values while the SIHU Network is being built on Avalanche C-Chain (Fuji Testnet). No real money is used.
+          <Info size={16} className="shrink-0 mt-0.5" /> Phase 1: your AVAX balance is read live from {network.name}. SIHU and USDT tokens are not on-chain yet, so they show 0, and the drop agent collects demo rewards only. No real money is used.
         </p>
 
         <div className="grid lg:grid-cols-3 gap-5 mt-8">
@@ -93,8 +88,14 @@ export default function SihuDApp() {
                     <LogOut size={15} /> Disconnect
                   </button>
                 </div>
-                <p className="text-[13px] text-slate-400 mt-8">Total value</p>
-                <p className="font-heading text-4xl md:text-5xl font-bold mt-1">${total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
+                <p className="text-[13px] text-slate-400 mt-8 flex items-center gap-2">
+                  AVAX balance · {network.name}
+                  <button onClick={() => void refreshBalances()} aria-label="Refresh balance" title="Refresh balance" className="text-slate-500 hover:text-sky-300"><RefreshCw size={13} className={balanceStatus === "loading" ? "animate-spin" : ""} /></button>
+                </p>
+                <p className="font-heading text-4xl md:text-5xl font-bold mt-1 tabular-nums">
+                  {balanceStatus === "loading" ? <span className="inline-block w-40 h-11 rounded-xl bg-white/10 animate-pulse align-middle" aria-label="Loading balance" /> : `${balances.avax.toLocaleString(undefined, { maximumFractionDigits: 4 })} AVAX`}
+                </p>
+                {balanceStatus === "unavailable" && <p className="text-[13px] text-amber-200/90 mt-2">The balance could not be read from the network for this address.</p>}
                 <div className="grid grid-cols-3 gap-3 mt-6">
                   {[
                     { l: "AVAX", v: balances.avax.toFixed(4) },
@@ -136,7 +137,7 @@ export default function SihuDApp() {
             </div>
             <h2 className="font-heading text-xl font-bold mt-5">Drop agent</h2>
             <p className="text-slate-400 text-[14.5px] mt-1.5 leading-relaxed">
-              {autoMineActive ? "Collecting rewards for ecosystem data you help verify." : connected ? "Turn on to collect rewards automatically." : "Connect a wallet to turn it on."}
+              {autoMineActive ? "Collecting demo rewards (not on-chain yet)." : connected ? "Turn on to try collecting demo rewards." : "Connect a wallet to turn it on."}
             </p>
             {autoMineActive && (
               <p className="mt-auto pt-5 flex items-center justify-between text-[14px]">
@@ -182,40 +183,36 @@ export default function SihuDApp() {
           </div>
         </div>
 
-        {/* Market and network */}
+        {/* Token status and real community numbers (invented prices / network figures removed) */}
         <div className="grid lg:grid-cols-3 gap-5 mt-14">
           <section className="lg:col-span-2 rounded-3xl bg-slate-900 border border-white/10 p-6">
-            <h2 className="font-bold text-[18px] flex items-center gap-2"><TrendingUp size={18} className="text-sky-300" /> Token prices <span className="text-[12px] font-medium text-slate-500">sample</span></h2>
-            <div className="mt-4 divide-y divide-white/5">
-              {PRICES.map((t) => (
-                <div key={t.s} className="flex items-center justify-between py-3">
-                  <span className="flex items-center gap-3">
-                    <span className="w-9 h-9 rounded-full bg-white/5 flex items-center justify-center text-[11px] font-bold text-slate-300">{t.s.slice(0, 2)}</span>
-                    <span className="font-semibold">{t.s}</span>
-                  </span>
-                  <span className="flex items-center gap-4 tabular-nums">
-                    <span className="font-mono">${t.p}</span>
-                    <span className={`text-[13px] font-semibold w-16 text-right ${t.c.startsWith("+") ? "text-emerald-400" : "text-slate-400"}`}>{t.c}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
+            <h2 className="font-bold text-[18px] flex items-center gap-2"><TrendingUp size={18} className="text-sky-300" /> Token prices</h2>
+            <p className="text-slate-400 text-[14.5px] leading-relaxed mt-3 max-w-xl">
+              SIHU and SANGO tokens are not trading yet, so there is no market price to show. Prices will appear here from a live market once trading opens.
+            </p>
+            <a href={network.explorerUrl} target="_blank" rel="noopener noreferrer" className="mt-4 inline-flex items-center gap-1.5 text-[14px] font-semibold text-sky-300 hover:text-sky-200">
+              View the {network.name} explorer <ArrowRight size={15} />
+            </a>
           </section>
           <section className="rounded-3xl bg-slate-900 border border-white/10 p-6">
-            <h2 className="font-bold text-[18px]">Network <span className="text-[12px] font-medium text-slate-500">sample</span></h2>
-            <div className="mt-4 space-y-4">
-              {[
-                { Icon: Landmark, l: "Value locked", v: "$2.4M" },
-                { Icon: Users, l: "Members", v: "12.4K" },
-                { Icon: Percent, l: "Node yield (yearly)", v: "27.5%" },
-              ].map((s) => (
-                <div key={s.l} className="flex items-center gap-3">
-                  <span className="w-10 h-10 rounded-xl bg-white/5 text-sky-300 flex items-center justify-center"><s.Icon size={18} /></span>
-                  <span className="flex-1 text-slate-400 text-[14px]">{s.l}</span>
-                  <span className="font-bold text-[17px] tabular-nums">{s.v}</span>
-                </div>
-              ))}
-            </div>
+            <h2 className="font-bold text-[18px] flex items-center gap-2"><Users size={18} className="text-sky-300" /> SIHU community</h2>
+            {stats.status === "loading" && <div className="mt-4 space-y-3 animate-pulse">{[0, 1, 2].map((i) => <div key={i} className="h-10 rounded-xl bg-white/5" />)}</div>}
+            {stats.status === "error" && <p className="mt-4 text-[14px] text-slate-400">Community numbers are unavailable right now.</p>}
+            {stats.status === "ready" && (
+              <div className="mt-4 space-y-4">
+                {[
+                  { l: "Registered members", v: stats.data.community?.members },
+                  { l: "Community reports", v: stats.data.community?.posts },
+                  { l: "Stories published", v: stats.data.stories },
+                ].filter((x) => typeof x.v === "number").map((x) => (
+                  <div key={x.l} className="flex items-center justify-between gap-3">
+                    <span className="text-slate-400 text-[14px]">{x.l}</span>
+                    <span className="font-bold text-[17px] tabular-nums">{(x.v as number).toLocaleString("en-KE")}</span>
+                  </div>
+                ))}
+                <p className="text-[12px] text-slate-500">Live from the SIHU database.</p>
+              </div>
+            )}
           </section>
         </div>
       </div>

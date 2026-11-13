@@ -15,7 +15,7 @@ function renderInline(
   onCitation: ((index: number) => void) | undefined,
   keyPrefix: string
 ): React.ReactNode[] {
-  const pattern = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\[\d+\]|\[[^\]]+\]\([^)]+\))/g;
+  const pattern = /(\*\*[^*]+\*\*|\*[^*\n]+\*|`[^`]+`|\[\d+\]|【\d+】|\[[^\]]+\]\([^)]+\))/g;
   const nodes: React.ReactNode[] = [];
   let lastIndex = 0;
   let match: RegExpExecArray | null;
@@ -42,8 +42,8 @@ function renderInline(
       );
     } else if (token.startsWith("*") && token.endsWith("*")) {
       nodes.push(<em key={key}>{token.slice(1, -1)}</em>);
-    } else if (/^\[\d+\]$/.test(token)) {
-      const citation = Number(token.slice(1, -1));
+    } else if (/^[\[【]\d+[\]】]$/.test(token)) {
+      const citation = Number(token.replace(/\D/g, ""));
       const valid = !!sources && citation >= 1 && citation <= sources.length;
       if (valid) {
         nodes.push(
@@ -62,7 +62,27 @@ function renderInline(
       }
     } else {
       const link = /^\[([^\]]+)\]\(([^)]+)\)$/.exec(token);
-      nodes.push(link ? link[1] : token);
+      if (link) {
+        const href = link[2].trim();
+        const safe = /^https?:\/\//i.test(href) || href.startsWith("/");
+        nodes.push(
+          safe ? (
+            <a
+              key={key}
+              href={href}
+              target={href.startsWith("/") ? undefined : "_blank"}
+              rel={href.startsWith("/") ? undefined : "noopener noreferrer"}
+              className="font-medium text-[var(--ai-primary)] underline decoration-[var(--ai-primary)]/30 underline-offset-2 hover:decoration-[var(--ai-primary)]"
+            >
+              {link[1]}
+            </a>
+          ) : (
+            link[1]
+          )
+        );
+      } else {
+        nodes.push(token);
+      }
     }
 
     lastIndex = match.index + token.length;

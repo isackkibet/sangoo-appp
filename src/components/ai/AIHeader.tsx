@@ -1,6 +1,7 @@
 "use client";
 
-import { Menu, Moon, PanelRight, Plus, Sun, Trash2, Waves } from "lucide-react";
+import { Menu, Moon, PanelRight, Plus, Sun, Trash2 } from "lucide-react";
+import SihuLogo from "@/components/brand/SihuLogo";
 import type { Language, ThemeMode } from "./types";
 import { dictionary } from "./i18n";
 import LanguageToggle from "./LanguageToggle";
@@ -44,8 +45,8 @@ export default function AIHeader({
       </button>
 
       <div className="flex min-w-0 items-center gap-2.5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--ai-navy)] text-white">
-          <Waves size={17} aria-hidden="true" />
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white ring-1 ring-[var(--ai-border)]">
+          <SihuLogo variant="mark" alt="" className="h-7" />
         </span>
         <div className="min-w-0">
           <p className="truncate text-[14px] font-semibold leading-tight tracking-[-0.01em] text-[var(--ai-text)]">

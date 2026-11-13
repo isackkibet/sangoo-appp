@@ -16,9 +16,10 @@ type Props = {
   webSources?: SourceItem[];
   related: ContentItem[];
   onFollowUp: () => void;
+  onSuggestion?: (prompt: string) => void;
 };
 
-export default function ChatMessage({ message, language, player, related, onFollowUp }: Props) {
+export default function ChatMessage({ message, language, player, related, onFollowUp, onSuggestion }: Props) {
   const t = dictionary[language];
   const mine = message.role === "user";
   const [reduceMotion] = useState(
@@ -105,6 +106,14 @@ export default function ChatMessage({ message, language, player, related, onFoll
           </div>
         </div>
 
+        {!streaming && !message.error && message.searchError && !message.webSources?.length && (
+          <p className="mt-1.5 px-1 text-[11.5px] leading-relaxed text-[var(--ai-warning-strong)]">
+            {language === "sw"
+              ? "Utafutaji wa wavuti haukupatikana, kwa hivyo jibu hili linaweza lisije na habari za hivi karibuni."
+              : "Live web search was unavailable, so this answer may not include the latest news."}
+          </p>
+        )}
+
         {!streaming && !message.error && (
           <AIResponseActions
             messageId={message.id}
@@ -116,6 +125,21 @@ export default function ChatMessage({ message, language, player, related, onFoll
             related={related}
             onFollowUp={onFollowUp}
           />
+        )}
+
+        {!streaming && !message.error && !!message.suggestions?.length && onSuggestion && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {message.suggestions.map((suggestion) => (
+              <button
+                key={suggestion}
+                type="button"
+                onClick={() => onSuggestion(suggestion)}
+                className="rounded-full border border-[var(--ai-border)] bg-[var(--ai-surface)] px-3 py-1.5 text-left text-[12px] font-medium text-[var(--ai-text)] transition-colors hover:border-[var(--ai-primary)]/40 hover:bg-[var(--ai-surface-2)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[var(--ai-primary)]"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
         )}
 
         {message.error && (

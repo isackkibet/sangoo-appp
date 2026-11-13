@@ -448,7 +448,18 @@ h1, h2, h3, h4, h5, h6 {
 /* ── Mobile global fixes ─────────────────────────────────────── */
 html {
   scroll-behavior: smooth;
+  /* In-page anchors (#contact, #events…) land below the fixed 72px site header. */
+  scroll-padding-top: 88px;
   -webkit-text-size-adjust: 100%;
+  text-rendering: optimizeLegibility;
+}
+
+/* SIHU lake-blue text selection and keyboard focus */
+::selection {
+  background: rgba(88, 179, 242, 0.28);
+}
+:focus-visible {
+  outline-color: #0ea5e9;
 }
 
 body {

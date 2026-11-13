@@ -87,13 +87,19 @@ export default function SubmitEventPage() {
     setStatus('submitting');
     setErrorMsg('');
     try {
-      // ── BACKEND INTEGRATION POINT ────────────────────────────────
-      // Replace with: await fetch('/api/events', { method: 'POST', body: JSON.stringify(form) })
-      await new Promise(r => setTimeout(r, 1200));
-      console.log('[EventSubmit] payload ready for backend:', form);
+      // Saved to the SIHU database for the editors to review (see /api/submissions).
+      const res = await fetch('/api/submissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind: 'event', data: form }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || 'Submission failed. Please try again.');
+      }
       setStatus('success');
-    } catch {
-      setErrorMsg('Submission failed. Please try again.');
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Submission failed. Please try again.');
       setStatus('error');
     }
   };
@@ -124,9 +130,9 @@ export default function SubmitEventPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb]">
+    <div className="min-h-screen bg-[#f6f8fb] pt-[72px]">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
+      <div className="bg-white border-b border-slate-200 sticky top-[72px] z-10">
         <div className="container mx-auto max-w-4xl px-4 h-16 flex items-center gap-4">
           <Link href="/portal" className="p-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors">
             <ArrowLeft size={18} />

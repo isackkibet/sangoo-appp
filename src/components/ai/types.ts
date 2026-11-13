@@ -43,6 +43,10 @@ export interface ChatMessageData {
   evidenceLevel?: "sihu" | "web" | "combined" | "insufficient";
   searchUsed?: boolean;
   queriesUsed?: number;
+  searchProvider?: string;
+  searchError?: string;
+  suggestions?: string[];
+  mode?: "answer" | "clarification" | "greeting";
   error?: boolean;
   animate?: boolean;
 }

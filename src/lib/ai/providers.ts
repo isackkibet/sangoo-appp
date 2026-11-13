@@ -10,25 +10,33 @@ export async function chatWithProvider(params: {
   apiKey: string;
   model: string;
   messages: ChatMessage[];
+  temperature?: number;
+  maxTokens?: number;
 }) {
-  const { provider, apiKey, model, messages } = params;
+  const { provider, apiKey, model, messages, temperature, maxTokens } = params;
 
   if (provider === "groq") {
-    return chatWithGroq(apiKey, model, messages);
+    return chatWithGroq(apiKey, model, messages, temperature, maxTokens);
   }
 
   if (provider === "openai") {
-    return chatWithOpenAI(apiKey, model, messages);
+    return chatWithOpenAI(apiKey, model, messages, temperature);
   }
 
   if (provider === "gemini") {
-    return chatWithGemini(apiKey, model, messages);
+    return chatWithGemini(apiKey, model, messages, temperature);
   }
 
-  return chatWithAnthropic(apiKey, model, messages);
+  return chatWithAnthropic(apiKey, model, messages, temperature, maxTokens);
 }
 
-async function chatWithGroq(apiKey: string, model: string, messages: ChatMessage[]) {
+async function chatWithGroq(
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  temperature = 0.7,
+  maxTokens = 1024
+) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -38,8 +46,8 @@ async function chatWithGroq(apiKey: string, model: string, messages: ChatMessage
     body: JSON.stringify({
       model,
       messages,
-      temperature: 0.7,
-      max_tokens: 1024,
+      temperature,
+      max_tokens: maxTokens,
     }),
   });
 
@@ -55,7 +63,12 @@ async function chatWithGroq(apiKey: string, model: string, messages: ChatMessage
   return data.choices?.[0]?.message?.content?.trim() || "No response returned from Groq.";
 }
 
-async function chatWithOpenAI(apiKey: string, model: string, messages: ChatMessage[]) {
+async function chatWithOpenAI(
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  temperature = 0.7
+) {
   const prompt = messages.map((message) => `${message.role.toUpperCase()}: ${message.content}`).join("\n\n");
 
   const response = await fetch("https://api.openai.com/v1/responses", {
@@ -67,6 +80,7 @@ async function chatWithOpenAI(apiKey: string, model: string, messages: ChatMessa
     body: JSON.stringify({
       model,
       input: prompt,
+      temperature,
     }),
   });
 
@@ -78,7 +92,12 @@ async function chatWithOpenAI(apiKey: string, model: string, messages: ChatMessa
   return data.output_text?.trim() || "No response returned from OpenAI.";
 }
 
-async function chatWithGemini(apiKey: string, model: string, messages: ChatMessage[]) {
+async function chatWithGemini(
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  temperature = 0.7
+) {
   const prompt = messages.map((message) => `${message.role.toUpperCase()}: ${message.content}`).join("\n\n");
 
   const response = await fetch(
@@ -94,6 +113,7 @@ async function chatWithGemini(apiKey: string, model: string, messages: ChatMessa
             parts: [{ text: prompt }],
           },
         ],
+        generationConfig: { temperature },
       }),
     }
   );
@@ -113,7 +133,13 @@ async function chatWithGemini(apiKey: string, model: string, messages: ChatMessa
   return data.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim() || "No response returned from Gemini.";
 }
 
-async function chatWithAnthropic(apiKey: string, model: string, messages: ChatMessage[]) {
+async function chatWithAnthropic(
+  apiKey: string,
+  model: string,
+  messages: ChatMessage[],
+  temperature = 0.7,
+  maxTokens = 900
+) {
   const system = messages.find((message) => message.role === "system")?.content || "";
   const conversation = messages
     .filter((message) => message.role !== "system")
@@ -131,7 +157,8 @@ async function chatWithAnthropic(apiKey: string, model: string, messages: ChatMe
     },
     body: JSON.stringify({
       model,
-      max_tokens: 700,
+      max_tokens: maxTokens,
+      temperature,
       system,
       messages: conversation,
     }),

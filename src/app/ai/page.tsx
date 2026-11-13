@@ -25,7 +25,6 @@ type ChatResponse = {
   reply?: string;
   provider?: string;
   model?: string;
-  mode?: string;
   error?: string;
   speechText?: string;
   isStory?: boolean;
@@ -35,6 +34,10 @@ type ChatResponse = {
   evidenceLevel?: "sihu" | "web" | "combined" | "insufficient";
   searchUsed?: boolean;
   queriesUsed?: number;
+  searchProvider?: string;
+  searchError?: string;
+  suggestions?: string[];
+  mode?: "answer" | "clarification" | "greeting";
 };
 
 function makeId() {
@@ -220,10 +223,11 @@ export default function AIAssistantPage() {
     [messages]
   );
 
-  const latestSources = useMemo(
-    () => resolveSources(latestAssistant?.sourceIds, articles),
-    [latestAssistant, articles]
-  );
+  const latestSources = useMemo(() => {
+    if (!latestAssistant) return [];
+    const direct = [...(latestAssistant.sihuSources ?? []), ...(latestAssistant.webSources ?? [])];
+    return direct.length > 0 ? direct : resolveSources(latestAssistant.sourceIds, articles);
+  }, [latestAssistant, articles]);
 
   const related = useMemo(
     () =>
@@ -367,6 +371,12 @@ export default function AIAssistantPage() {
           evidenceLevel: data.evidenceLevel,
           searchUsed: data.searchUsed,
           queriesUsed: data.queriesUsed,
+          searchProvider: data.searchProvider,
+          searchError: typeof data.searchError === "string" ? data.searchError : undefined,
+          suggestions: Array.isArray(data.suggestions)
+            ? data.suggestions.filter((suggestion): suggestion is string => typeof suggestion === "string")
+            : [],
+          mode: data.mode,
           animate: true,
         };
 

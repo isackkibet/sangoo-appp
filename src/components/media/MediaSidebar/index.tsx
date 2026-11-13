@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Home, Search, Compass, Film, Send, Heart, PlusSquare, User, ArrowLeft,
+  Home, Search, Compass, Film, Send, Heart, PlusSquare, User, ArrowLeft, Bell,
 } from 'lucide-react';
 import { useMediaSearchStore, useMediaNotificationsStore, useCreatePostStore } from '@/store/media/modalStores';
 
@@ -30,6 +30,7 @@ function useNav(): NavItem[] {
     { label: 'Explore',    nav: { href: '/media/explore' }, Icon: Compass },
     { label: 'Reels',      nav: { href: '/media/reels' },   Icon: Film },
     { label: 'Messages',   nav: { href: '/media/direct' },  Icon: Send },
+    { label: 'Notifications', nav: { action: openNotifs }, Icon: Bell },
     { label: 'Liked',      nav: { href: '/media/liked' },   Icon: Heart },
     { label: 'Create',     nav: { action: openCreate },     Icon: PlusSquare },
     { label: 'Profile',    nav: { href: '/media/profile' }, Icon: User },

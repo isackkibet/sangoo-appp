@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Circle, Loader2, Sparkles, Waves } from "lucide-react";
+import { Check, Circle, Loader2, Sparkles } from "lucide-react";
+import SihuLogo from "@/components/brand/SihuLogo";
 import type { ChatMessageData, ContentItem, Language } from "./types";
 import { dictionary } from "./i18n";
 import ChatMessage from "./ChatMessage";
@@ -128,8 +129,8 @@ export default function AIChat({
         <div className="relative mx-auto flex min-h-full w-full max-w-3xl flex-col items-center justify-center px-4 py-10 md:px-6">
           <div className="ai-welcome-glow" aria-hidden="true" />
           <div className="relative flex flex-col items-center text-center">
-            <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--ai-navy)] text-white shadow-[0_14px_30px_-16px_rgba(16,43,85,0.8)]">
-              <Waves size={26} aria-hidden="true" />
+            <span className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-2xl bg-white ring-1 ring-[var(--ai-border)] shadow-[0_14px_30px_-16px_rgba(16,43,85,0.8)]">
+              <SihuLogo variant="mark" alt="Sango Information Hub" className="h-14" />
             </span>
             <span className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-[var(--ai-lake)] px-3 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-[var(--ai-primary)]">
               <Sparkles size={12} aria-hidden="true" /> SIHU AI
@@ -163,6 +164,7 @@ export default function AIChat({
               webSources={message.webSources}
               related={message.id === lastAssistantId ? related : []}
               onFollowUp={onFollowUp}
+              onSuggestion={onSuggestion}
             />
           );
         })}

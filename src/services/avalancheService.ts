@@ -91,3 +91,22 @@ export async function connectMetaMaskToAvax(): Promise<string> {
   const accounts = await ethereum.request({ method: 'eth_requestAccounts' }) as string[];
   return accounts[0];
 }
+
+// ─── Balances ─────────────────────────────────────────────────────────────────
+
+/** Real AVAX balance of an address on the active network, or null if it can't be read. */
+export async function getAvaxBalance(address: string): Promise<number | null> {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) return null;
+  try {
+    const res = await fetch(network.rpcUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'eth_getBalance', params: [address, 'latest'] }),
+    });
+    const json = (await res.json()) as { result?: string };
+    if (!json.result) return null;
+    return Number(BigInt(json.result)) / 1e18;
+  } catch {
+    return null;
+  }
+}
