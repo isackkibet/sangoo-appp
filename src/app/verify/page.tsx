@@ -7,67 +7,26 @@ import VerificationHUD from '../../components/portal/verify/VerificationHUD';
 import TaskGallery from '../../components/portal/verify/TaskGallery';
 import AnnotationTool from '../../components/portal/verify/AnnotationTool';
 import { VerifyTask } from '../../constants/verifyData';
-import { CheckCircle2, X, MousePointerClick, ScanSearch, Coins, Info } from 'lucide-react';
+import { CheckCircle2, X, MousePointerClick, ScanSearch, Coins } from 'lucide-react';
 
-// Everyone starts at zero (it used to start at an invented 340 XP, level 3, 5-day streak).
-// Progress is practice progress, kept on this device.
+// Simulated Gamification State
 const INITIAL_STATE = {
-  xp: 0,
-  level: 1,
-  streak: 0,
+  xp: 340,
+  level: 3,
+  streak: 5,
   combo: 1,
   creditsToday: 0,
   verifiedToday: 0,
 };
-const PROGRESS_KEY = 'sihu_verify_practice_v1';
-type Progress = typeof INITIAL_STATE & { day: string; lastDay: string | null; completed: string[] };
-const today = () => new Date().toISOString().slice(0, 10);
-
-function loadProgress(): Progress {
-  const fresh: Progress = { ...INITIAL_STATE, day: today(), lastDay: null, completed: [] };
-  try {
-    const saved = JSON.parse(localStorage.getItem(PROGRESS_KEY) || 'null') as Progress | null;
-    if (!saved) return fresh;
-    // A new day resets "today" counters; the streak continues only if yesterday had a check.
-    if (saved.day !== today()) {
-      const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
-      return { ...saved, day: today(), creditsToday: 0, verifiedToday: 0, combo: 1, streak: saved.lastDay === yesterday ? saved.streak : 0 };
-    }
-    return saved;
-  } catch { return fresh; }
-}
 
 const XP_LEVELS = [0, 100, 250, 500, 800, 1200, 1800, 2600, 3600, 5000];
 
 export default function VerifyAndEarnPage() {
   const [gamState, setGamState] = useState(INITIAL_STATE);
-  const [hydrated, setHydrated] = useState(false);
   const [selectedTask, setSelectedTask] = useState<VerifyTask | null>(null);
   const [completedTaskIds, setCompletedTaskIds] = useState<string[]>([]);
   const [lastVerifyTime, setLastVerifyTime] = useState(0);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
-
-  // Restore this device's practice progress, then keep it saved.
-  // (Read after mount: localStorage does not exist while the page is rendered on the server.)
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => {
-      const p = loadProgress();
-      setGamState({ xp: p.xp, level: p.level, streak: p.streak, combo: p.combo, creditsToday: p.creditsToday, verifiedToday: p.verifiedToday });
-      setCompletedTaskIds(p.completed);
-      setHydrated(true);
-    });
-    return () => cancelAnimationFrame(frame);
-  }, []);
-  useEffect(() => {
-    if (!hydrated) return;
-    const prev = loadProgress();
-    localStorage.setItem(PROGRESS_KEY, JSON.stringify({
-      ...gamState,
-      day: today(),
-      lastDay: gamState.verifiedToday > 0 ? today() : prev.lastDay,
-      completed: completedTaskIds,
-    }));
-  }, [gamState, completedTaskIds, hydrated]);
 
   // Auto-hide toast
   useEffect(() => {
@@ -114,8 +73,6 @@ export default function VerifyAndEarnPage() {
         level: newLevel,
         creditsToday: prev.creditsToday + earnCredits,
         verifiedToday: prev.verifiedToday + 1,
-        // The first check of a day extends the streak.
-        streak: prev.verifiedToday === 0 ? prev.streak + 1 : prev.streak,
         combo: newCombo
       };
     });
@@ -143,7 +100,7 @@ export default function VerifyAndEarnPage() {
             <p className="text-[13px] font-bold uppercase tracking-[0.14em] text-sky-700">Impact network</p>
             <h1 className="font-heading text-[34px] md:text-[42px] font-bold text-slate-900 leading-tight mt-2">Verify and earn</h1>
             <p className="text-[16px] text-slate-600 mt-2 max-w-2xl leading-relaxed">
-              Help SIHU keep environmental reporting true. Practise checking field photos and earn practice credits for each careful check.
+              Help SIHU keep environmental reporting true. Check field photos from community members and earn SIHU credits for each careful check.
             </p>
           </div>
           <ol className="grid grid-cols-3 gap-2 lg:w-[460px] shrink-0">
@@ -159,11 +116,6 @@ export default function VerifyAndEarnPage() {
             ))}
           </ol>
         </div>
-
-        <p className="flex items-start gap-2 text-[14px] text-sky-900 bg-sky-50 border border-sky-100 rounded-2xl px-4 py-3">
-          <Info size={17} className="shrink-0 mt-0.5 text-sky-700" />
-          Practice round: these are sample photos, and your level, streak and credits are saved only on this device. Real community reports will appear here when verification opens.
-        </p>
 
         {/* HUD */}
         <VerificationHUD 

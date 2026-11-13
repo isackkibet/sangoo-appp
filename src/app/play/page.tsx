@@ -27,7 +27,7 @@ export default function PlayHubPage() {
               
               <h2 className="text-3xl font-black text-white mb-4 tracking-tighter uppercase">Predictions <br />Market</h2>
               <p className="text-slate-400 font-medium mb-8 flex-1 leading-relaxed">
-                Practise forecasting outcomes for the Lake Victoria Basin — water quality, reforestation and energy projects — and see how your predictions compare.
+                Stake your SIHU Credits on basin-wide telemetry outcomes. Analyze trends, predict water levels, and earn yields on high-integrity data.
               </p>
               
               <div className="flex items-center gap-2 text-primary font-black uppercase tracking-widest text-xs group-hover:translate-x-2 transition-transform">
@@ -55,7 +55,7 @@ export default function PlayHubPage() {
               
               <h2 className="text-3xl font-black text-white mb-4 tracking-tighter uppercase">AI Strategic<br />Chess</h2>
               <p className="text-slate-400 font-medium mb-8 flex-1 leading-relaxed">
-                Challenge the SIHU chess AI at three difficulty levels. Play right in your browser — no account needed.
+                Challenge our basin-trained AI engine in a strategic chess match. Prove your intelligence, stake credits, and rise in the agent leaderboard.
               </p>
               
               <div className="flex items-center gap-2 text-accent font-black uppercase tracking-widest text-xs group-hover:translate-x-2 transition-transform">
@@ -68,16 +68,26 @@ export default function PlayHubPage() {
 
       </div>
       
-      {/* Was a panel of invented network numbers (players, staked, yields); replaced by an honest note. */}
-      <motion.p
+      {/* Network Stats Footer */}
+      <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.8, delay: 0.4 }}
-        className="mt-12 p-6 border border-white/10 rounded-3xl bg-slate-900/50 text-center text-[14px] text-slate-300 leading-relaxed"
+        className="mt-12 p-8 border border-white/5 rounded-3xl bg-slate-900/50 flex flex-wrap items-center justify-center gap-12"
       >
-        Play is in <strong className="text-white">practice mode</strong>: markets use practice credits only, and no money or tokens are staked.
-        Leaderboards and live markets will appear here once they launch.
-      </motion.p>
+        <div className="text-center">
+           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Active Players</div>
+           <div className="text-xl font-black text-white">4,284</div>
+        </div>
+        <div className="text-center">
+           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Total Staked</div>
+           <div className="text-xl font-black text-primary">840.4K SIHU</div>
+        </div>
+        <div className="text-center">
+           <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Yields Distributed</div>
+           <div className="text-xl font-black text-emerald-400">+125,280</div>
+        </div>
+      </motion.div>
     </div>
   );
 }

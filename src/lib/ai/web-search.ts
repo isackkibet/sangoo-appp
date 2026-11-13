@@ -7,14 +7,20 @@
  *
  * All fetching happens server-side so API keys never reach the browser.
  * External pages are treated as untrusted data: we only use the title, URL,
- * publication date and a short snippet supplied by the search provider.
- * Retrieved content is never executed and cannot override agent instructions.
+ * publication date, image and a short snippet supplied by the search provider
+ * or the article's Open Graph metadata. Retrieved content is never executed and
+ * cannot override agent instructions.
  */
 
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_SEARCH_QUERIES = 3;
 const MAX_EXTERNAL_SOURCES = 6;
 const MAX_SNIPPET_CHARS = 420;
+const MAX_METADATA_CHARS = 300_000;
+const METADATA_TIMEOUT_MS = 7_000;
+const CACHE_TTL_MS = 10 * 60_000;
+const BROWSER_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
 // Trusted-source hints (government, academic, environmental, recognized news,
 // official regional institutions). These raise a result's rank but never grant
@@ -84,12 +90,104 @@ const PUBLISHER_NAMES: Record<string, string> = {
   "eac.int": "East African Community",
 };
 
+const COUNTRY_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: "Kenya",
+    pattern:
+      /\b(kenya|kisumu|siaya|homa bay|migori|busia|bungoma|kakamega|vihiga|nairobi|mombasa|kisii|nyamira|kisii|kajiado|nakuru|eldoret|nyanza)\b/i,
+  },
+  { label: "Uganda", pattern: /\b(uganda|kampala|entebbe|jinja|gulu|mbale)\b/i },
+  { label: "Tanzania", pattern: /\b(tanzania|mwanza|musoma|bukoba|dar es salaam|dodoma|arusha)\b/i },
+  { label: "Rwanda", pattern: /\b(rwanda|kigali)\b/i },
+  { label: "Burundi", pattern: /\b(burundi|bujumbura|gitega)\b/i },
+  { label: "South Sudan", pattern: /\b(south sudan|juba)\b/i },
+  { label: "Ethiopia", pattern: /\b(ethiopia|addis ababa)\b/i },
+  { label: "DR Congo", pattern: /\b(drc|democratic republic of (?:the )?congo|kinshasa)\b/i },
+];
+
+const COUNTY_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: "Kisumu", pattern: /\bkisumu\b/i },
+  { label: "Siaya", pattern: /\bsiaya\b/i },
+  { label: "Homa Bay", pattern: /\bhoma bay\b/i },
+  { label: "Migori", pattern: /\bmigori\b/i },
+  { label: "Busia", pattern: /\bbusia\b/i },
+  { label: "Bungoma", pattern: /\bbungoma\b/i },
+  { label: "Kakamega", pattern: /\bkakamega\b/i },
+  { label: "Vihiga", pattern: /\bvihiga\b/i },
+  { label: "Nairobi", pattern: /\bnairobi\b/i },
+  { label: "Mwanza", pattern: /\bmwanza\b/i },
+  { label: "Mara", pattern: /\bmusoma\b|\bmara\b/i },
+  { label: "Kagera", pattern: /\bbukoba\b|\bkagera\b/i },
+];
+
+const LOCATION_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  { label: "Lake Victoria", pattern: /\blake victoria|victoria basin|ziwa victoria\b/i },
+  { label: "Nile Basin", pattern: /\bnile basin\b/i },
+  { label: "East Africa", pattern: /\beast africa(?:n community)?\b|\beac\b/i },
+];
+
+const TOPIC_PATTERNS: Array<{ label: string; pattern: RegExp }> = [
+  {
+    label: "Fisheries",
+    pattern: /\b(fish|fisher|fisheries|fishing|uvuvi|aquaculture|trawler|catch|fishing boat|fishing nets?)\b/i,
+  },
+  {
+    label: "Environment",
+    pattern:
+      /\b(environment|environmental|conservation|climate|ecosystem|pollution|polluted|wetland|biodiversity|deforestation|sewage|waste|flood|drought|hyacinth|mazingira|uhifadhi)\b/i,
+  },
+  {
+    label: "Community development",
+    pattern: /\b(community|livelihood|livelihoods|development|poverty|chama|jamii|maisha|women|youth)\b/i,
+  },
+  {
+    label: "Blue economy",
+    pattern: /\b(blue economy|port|maritime|shipping|trade|investment|tourism|uchumi wa bluu)\b/i,
+  },
+  {
+    label: "Governance",
+    pattern: /\b(governance|rights|accountability|justice|court|corruption|policy|law|regulation|gazette)\b/i,
+  },
+  {
+    label: "Water and sanitation",
+    pattern: /\b(water|sanitation|maji|usafi|drinking water)\b/i,
+  },
+  {
+    label: "Agriculture",
+    pattern: /\b(agriculture|farming|farmer|crop|irrigation|kilimo)\b/i,
+  },
+  {
+    label: "Health",
+    pattern: /\b(health|hospital|disease|malaria|afya)\b/i,
+  },
+  {
+    label: "Education",
+    pattern: /\b(education|school|learning|elimu)\b/i,
+  },
+];
+
+const PRIORITY_PATTERNS: Array<{ score: number; pattern: RegExp }> = [
+  { score: 10, pattern: /\bkisumu\b/i },
+  { score: 9, pattern: /\blake victoria|victoria basin|ziwa victoria\b/i },
+  { score: 7, pattern: /\bkenya\b/i },
+  { score: 6, pattern: /\bfish|fisher|fisheries|fishing|uvuvi\b/i },
+  { score: 5, pattern: /\benvironment|environmental|conservation|climate|ecosystem\b/i },
+  { score: 4, pattern: /\bcommunity|livelihood|livelihoods|development\b/i },
+];
+
 export interface SearchResult {
   url: string;
   title: string;
   snippet: string;
   publishedAt?: string;
   publisher?: string;
+  image?: string;
+  country?: string;
+  county?: string;
+  locations?: string[];
+  topics?: string[];
+  verified?: boolean;
+  viaGoogleNews?: boolean;
 }
 
 export type SearchProvider = "tavily" | "custom" | "google-news" | "bing" | "duckduckgo" | "none";
@@ -108,6 +206,8 @@ interface RawResult {
   content?: string;
   publishedAt?: string;
   published_date?: string;
+  image?: string;
+  images?: Array<string | { url?: string; description?: string }>;
 }
 
 function isTrustedDomain(url: string): boolean {
@@ -149,12 +249,13 @@ function recencyScore(publishedAt?: string): number {
 }
 
 function scoreResult(result: SearchResult, topic: "news" | "general"): number {
+  const text = `${result.title} ${result.snippet}`;
   let score = 0;
   if (isTrustedDomain(result.url)) score += 10;
-  if (/\b(kenya|uganda|tanzania|rwanda|burundi|lake victoria|victoria basin|east africa|nile basin)\b/i.test(`${result.title} ${result.snippet}`)) {
-    score += 4;
+  for (const priority of PRIORITY_PATTERNS) {
+    if (priority.pattern.test(text)) score += priority.score;
   }
-  if (/\b(regulation|policy|act|law|gazette|ministry|authority|report|study|research)\b/i.test(`${result.title} ${result.snippet}`)) {
+  if (/\b(regulation|policy|act|law|gazette|ministry|authority|report|study|research)\b/i.test(text)) {
     score += 2;
   }
   if (topic === "news") score += recencyScore(result.publishedAt);
@@ -255,6 +356,306 @@ function normalizeDate(value: string | undefined): string | undefined {
   return trimmed.slice(0, 40);
 }
 
+function normalizeImageUrl(raw: string | undefined, base?: string): string | undefined {
+  if (!raw) return undefined;
+  try {
+    const url = base ? new URL(raw, base) : new URL(raw);
+    if (url.protocol !== "http:" && url.protocol !== "https:") return undefined;
+    url.hash = "";
+    return url.toString();
+  } catch {
+    return undefined;
+  }
+}
+
+function firstImage(images: RawResult["images"]): string | undefined {
+  if (!Array.isArray(images)) return undefined;
+  for (const image of images) {
+    const raw = typeof image === "string" ? image : image?.url;
+    const normalized = normalizeImageUrl(raw);
+    if (normalized) return normalized;
+  }
+  return undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function metaContent(html: string, key: string): string | undefined {
+  const escaped = escapeRegExp(key);
+  const patterns = [
+    new RegExp(`<meta[^>]+(?:property|name)\\s*=\\s*["']${escaped}["'][^>]*content\\s*=\\s*["']([^"']*)["']`, "i"),
+    new RegExp(`<meta[^>]+content\\s*=\\s*["']([^"']*)["'][^>]*(?:property|name)\\s*=\\s*["']${escaped}["']`, "i"),
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(html);
+    if (match?.[1]) return decodeXml(match[1]).trim();
+  }
+  return undefined;
+}
+
+function isGoogleNewsUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return parsed.hostname === "news.google.com" && /\/articles\//.test(parsed.pathname);
+  } catch {
+    return false;
+  }
+}
+
+function parseGoogleNewsResolution(text: string): string | null {
+  try {
+    const cleaned = text.replace(/^\)\]\}'\s*/, "").trim();
+    const rows = JSON.parse(cleaned) as unknown[];
+    for (const row of rows) {
+      if (!Array.isArray(row) || row[0] !== "wrb.fr" || row[1] !== "Fbv4je" || typeof row[2] !== "string") {
+        continue;
+      }
+      const data = JSON.parse(row[2]) as unknown;
+      if (Array.isArray(data) && data[0] === "garturlres" && typeof data[1] === "string") {
+        return data[1];
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+interface PageMetadata {
+  url: string;
+  verified: boolean;
+  image?: string;
+  summary?: string;
+  publishedAt?: string;
+}
+
+const metadataCache = new Map<string, { expires: number; value: PageMetadata }>();
+const googleNewsCache = new Map<string, { expires: number; value: string | null }>();
+
+function readCache<T>(cache: Map<string, { expires: number; value: T }>, key: string): T | undefined {
+  const cached = cache.get(key);
+  if (!cached) return undefined;
+  if (cached.expires <= Date.now()) {
+    cache.delete(key);
+    return undefined;
+  }
+  return cached.value;
+}
+
+function writeCache<T>(cache: Map<string, { expires: number; value: T }>, key: string, value: T): void {
+  if (cache.size > 200) {
+    for (const [cacheKey, entry] of cache) {
+      if (entry.expires <= Date.now()) cache.delete(cacheKey);
+    }
+  }
+  cache.set(key, { expires: Date.now() + CACHE_TTL_MS, value });
+}
+
+async function resolveGoogleNewsUrl(url: string, timeoutMs: number): Promise<string | null> {
+  const cached = readCache(googleNewsCache, url);
+  if (cached !== undefined) return cached;
+
+  try {
+    const articleId = /\/articles\/([^/?]+)/.exec(new URL(url).pathname)?.[1];
+    if (!articleId) throw new Error("Google News article id not found");
+
+    const page = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          "User-Agent": BROWSER_USER_AGENT,
+          Accept: "text/html,application/xhtml+xml",
+        },
+        redirect: "follow",
+      },
+      timeoutMs
+    );
+    if (!page.ok) throw new Error(`Google News article page failed: ${page.status}`);
+
+    const html = await page.text();
+    const signature = /data-n-a-sg="([^"]+)"/.exec(html)?.[1];
+    const timestamp = /data-n-a-ts="([^"]+)"/.exec(html)?.[1];
+    if (!signature || !timestamp) throw new Error("Google News article signature missing");
+
+    const payload = [
+      "garturlreq",
+      [
+        ["X", "X", ["X", "X"], null, null, 1, 1, "US:en", null, 1, null, null, null, null, null, 0, 1],
+        "X",
+        "X",
+        1,
+        [1, 1, 1],
+        1,
+        1,
+        null,
+        0,
+        0,
+        null,
+        0,
+      ],
+      articleId,
+      Number(timestamp),
+      signature,
+    ];
+    const body = new URLSearchParams();
+    body.append("f.req", JSON.stringify([[[ "Fbv4je", JSON.stringify(payload), null, "generic" ]]]));
+
+    const response = await fetchWithTimeout(
+      "https://news.google.com/_/DotsSplashUi/data/batchexecute",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+          "User-Agent": BROWSER_USER_AGENT,
+        },
+        body,
+      },
+      timeoutMs
+    );
+    if (!response.ok) throw new Error(`Google News resolution failed: ${response.status}`);
+
+    const resolved = parseGoogleNewsResolution(await response.text());
+    const normalized = resolved ? normalizeUrl(resolved) : null;
+    const output = normalized && !isGoogleNewsUrl(normalized) ? normalized : null;
+    writeCache(googleNewsCache, url, output);
+    return output;
+  } catch {
+    writeCache(googleNewsCache, url, null);
+    return null;
+  }
+}
+
+async function fetchPageMetadata(url: string, timeoutMs: number): Promise<PageMetadata> {
+  const cached = readCache(metadataCache, url);
+  if (cached) return cached;
+
+  try {
+    const response = await fetchWithTimeout(
+      url,
+      {
+        headers: {
+          "User-Agent": BROWSER_USER_AGENT,
+          Accept: "text/html,application/xhtml+xml",
+        },
+        redirect: "follow",
+      },
+      timeoutMs
+    );
+    const finalUrl = response.url || url;
+    if (!response.ok) {
+      const value = { url: finalUrl, verified: false };
+      writeCache(metadataCache, url, value);
+      return value;
+    }
+
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!/html/i.test(contentType)) {
+      const value = { url: finalUrl, verified: true };
+      writeCache(metadataCache, url, value);
+      return value;
+    }
+
+    const html = (await response.text()).slice(0, MAX_METADATA_CHARS);
+    const image =
+      normalizeImageUrl(
+        metaContent(html, "og:image") ??
+          metaContent(html, "og:image:url") ??
+          metaContent(html, "twitter:image") ??
+          metaContent(html, "twitter:image:src") ??
+          /<link[^>]+rel=["']image_src["'][^>]+href=["']([^"']+)["']/i.exec(html)?.[1],
+        finalUrl
+      ) ?? undefined;
+    const summary = sanitizeSnippet(
+      metaContent(html, "og:description") ??
+        metaContent(html, "twitter:description") ??
+        metaContent(html, "description") ??
+        ""
+    );
+    const publishedAt = normalizeDate(
+      metaContent(html, "article:published_time") ??
+        metaContent(html, "datePublished") ??
+        metaContent(html, "date") ??
+        /"datePublished"\s*:\s*"([^"]+)"/i.exec(html)?.[1]
+    );
+
+    const value: PageMetadata = {
+      url: finalUrl,
+      verified: true,
+      image,
+      summary: summary.length >= 40 ? summary : undefined,
+      publishedAt,
+    };
+    writeCache(metadataCache, url, value);
+    return value;
+  } catch {
+    const value = { url, verified: false };
+    writeCache(metadataCache, url, value);
+    return value;
+  }
+}
+
+function classifyResult(result: SearchResult): SearchResult {
+  const text = `${result.title} ${result.snippet} ${result.publisher ?? ""}`;
+  const country = COUNTRY_PATTERNS.find((entry) => entry.pattern.test(text))?.label;
+  const county = COUNTY_PATTERNS.find((entry) => entry.pattern.test(text))?.label;
+  const locations = LOCATION_PATTERNS.filter((entry) => entry.pattern.test(text)).map((entry) => entry.label);
+  const topics = TOPIC_PATTERNS.filter((entry) => entry.pattern.test(text))
+    .map((entry) => entry.label)
+    .slice(0, 3);
+
+  return {
+    ...result,
+    country,
+    county,
+    locations: locations.length > 0 ? locations : undefined,
+    topics: topics.length > 0 ? topics : undefined,
+  };
+}
+
+async function enrichResult(result: SearchResult, timeoutMs: number): Promise<SearchResult> {
+  let finalUrl = result.url;
+  let viaGoogleNews = false;
+
+  if (isGoogleNewsUrl(result.url)) {
+    const resolved = await resolveGoogleNewsUrl(result.url, Math.min(timeoutMs, METADATA_TIMEOUT_MS));
+    if (resolved) {
+      finalUrl = resolved;
+    } else {
+      viaGoogleNews = true;
+    }
+  }
+
+  if (isGoogleNewsUrl(finalUrl)) {
+    return classifyResult({
+      ...result,
+      url: finalUrl,
+      verified: true,
+      viaGoogleNews: true,
+    });
+  }
+
+  const metadata = await fetchPageMetadata(finalUrl, Math.min(timeoutMs, METADATA_TIMEOUT_MS));
+  const redirectedUrl = metadata.url && !isGoogleNewsUrl(metadata.url) ? metadata.url : finalUrl;
+  const summary =
+    metadata.summary && metadata.summary.length >= 40 ? metadata.summary : result.snippet;
+
+  return classifyResult({
+    ...result,
+    url: redirectedUrl,
+    snippet: summary,
+    image: result.image ?? metadata.image,
+    publishedAt: result.publishedAt ?? metadata.publishedAt,
+    verified: metadata.verified,
+    viaGoogleNews: viaGoogleNews || isGoogleNewsUrl(redirectedUrl),
+  });
+}
+
+async function enrichResults(results: SearchResult[], timeoutMs: number): Promise<SearchResult[]> {
+  return Promise.all(results.map((result) => enrichResult(result, timeoutMs)));
+}
+
 function toResult(item: RawResult): SearchResult | null {
   const url = typeof item.url === "string" ? normalizeUrl(item.url) : null;
   const title = typeof item.title === "string" ? item.title.trim() : "";
@@ -265,6 +666,7 @@ function toResult(item: RawResult): SearchResult | null {
     snippet: sanitizeSnippet(item.content ?? item.snippet ?? ""),
     publishedAt: normalizeDate(item.publishedAt ?? item.published_date),
     publisher: publisherFromUrl(url),
+    image: normalizeImageUrl(item.image) ?? firstImage(item.images),
   };
 }
 
@@ -310,6 +712,9 @@ async function searchTavily(params: {
     search_depth: "advanced",
     include_answer: false,
     include_raw_content: false,
+    include_images: true,
+    include_image_descriptions: false,
+    include_favicon: true,
     max_results: Math.min(Math.max(params.maxResults, 1), 10),
     topic: params.topic,
   };
@@ -419,12 +824,28 @@ function rssTag(item: string, tag: string): string | undefined {
   return match ? decodeXml(match[1]).trim() : undefined;
 }
 
+function rssImage(item: string): string | undefined {
+  const patterns = [
+    /<media:content[^>]+url="([^"]+)"/i,
+    /<media:thumbnail[^>]+url="([^"]+)"/i,
+    /<enclosure[^>]+url="([^"]+)"[^>]*type="image\//i,
+    /<enclosure[^>]+type="image\/[^"]+"[^>]*url="([^"]+)"/i,
+  ];
+  for (const pattern of patterns) {
+    const match = pattern.exec(item);
+    const image = normalizeImageUrl(match?.[1]);
+    if (image) return image;
+  }
+  return undefined;
+}
+
 function parseRssItems(xml: string): Array<{
   title?: string;
   link?: string;
   description?: string;
   pubDate?: string;
   source?: string;
+  image?: string;
 }> {
   const items = Array.from(xml.matchAll(/<item[^>]*>([\s\S]*?)<\/item>/gi));
   return items.map((match) => {
@@ -436,6 +857,7 @@ function parseRssItems(xml: string): Array<{
       description: rssTag(item, "description"),
       pubDate: rssTag(item, "pubDate"),
       source: sourceMatch ? decodeXml(sourceMatch[2]).trim() : undefined,
+      image: rssImage(item),
     };
   });
 }
@@ -476,6 +898,7 @@ async function searchGoogleNews(
         snippet: sanitizeSnippet(item.description || ""),
         publishedAt: normalizeDate(item.pubDate),
         publisher: source,
+        image: item.image,
       };
     })
     .filter((result): result is SearchResult => !!result)
@@ -512,6 +935,7 @@ async function searchBingRss(
         snippet: sanitizeSnippet(item.description || ""),
         publishedAt: normalizeDate(item.pubDate),
         publisher: publisherFromUrl(urlValue),
+        image: item.image,
       };
     })
     .filter((result): result is SearchResult => !!result)
@@ -618,14 +1042,16 @@ export async function webSearch(params: {
     .map((entry) => entry.result)
     .slice(0, maxSources);
 
-  if (deduped.length === 0 && !error) {
+  const enriched = await enrichResults(deduped, timeoutMs);
+
+  if (enriched.length === 0 && !error) {
     error = "Live search returned no results. Set TAVILY_API_KEY for reliable news search.";
   }
 
   return {
-    results: deduped,
+    results: enriched,
     queriesUsed: queries.length,
-    provider: deduped.length > 0 ? provider : "none",
+    provider: enriched.length > 0 ? provider : "none",
     error,
   };
 }

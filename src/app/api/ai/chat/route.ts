@@ -57,6 +57,8 @@ export async function POST(req: NextRequest) {
       location: source.publisher,
       publishedAt: source.publishedAt,
       snippet: source.snippet,
+      verified: source.verified,
+      viaGoogleNews: source.viaGoogleNews,
     }));
     const webSources: SourceItem[] = result.webSources.map((source) => ({
       id: source.id,
@@ -67,6 +69,13 @@ export async function POST(req: NextRequest) {
       location: source.publisher,
       publishedAt: source.publishedAt,
       snippet: source.snippet,
+      verified: source.verified,
+      viaGoogleNews: source.viaGoogleNews,
+      image: source.image,
+      country: source.country,
+      county: source.county,
+      locations: source.locations,
+      topics: source.topics,
     }));
 
     return NextResponse.json({

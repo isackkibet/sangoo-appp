@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   if (!article) return { title: "Article Not Found" };
 
   return {
-    title: article.title,
+    title: `${article.title} | Sango Information Hub`,
     description: article.excerpt,
     openGraph: {
       title: article.title,

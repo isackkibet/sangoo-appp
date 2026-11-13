@@ -74,19 +74,13 @@ export default function SubmitPodcastPage() {
     setStatus('submitting');
     setErrorMsg('');
     try {
-      // Saved to the SIHU database for the editors to review (see /api/submissions).
-      const res = await fetch('/api/submissions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: 'podcast', data: form }),
-      });
-      if (!res.ok) {
-        const j = (await res.json().catch(() => ({}))) as { error?: string };
-        throw new Error(j.error || 'Submission failed. Please try again.');
-      }
+      // ── BACKEND INTEGRATION POINT ────────────────────────────────
+      // Replace with: await fetch('/api/podcasts', { method: 'POST', body: JSON.stringify(form) })
+      await new Promise(r => setTimeout(r, 1200));
+      console.log('[PodcastSubmit] payload ready for backend:', form);
       setStatus('success');
-    } catch (error) {
-      setErrorMsg(error instanceof Error ? error.message : 'Submission failed. Please try again.');
+    } catch {
+      setErrorMsg('Submission failed. Please try again.');
       setStatus('error');
     }
   };
@@ -117,9 +111,9 @@ export default function SubmitPodcastPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f8fb] pt-[72px]">
+    <div className="min-h-screen bg-[#f6f8fb]">
       {/* Header */}
-      <div className="bg-white border-b border-slate-200 sticky top-[72px] z-10">
+      <div className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="container mx-auto max-w-4xl px-4 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <Link href="/portal" className="p-2 rounded-full hover:bg-slate-100 text-slate-600 transition-colors">

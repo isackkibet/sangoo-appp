@@ -18,7 +18,7 @@
 
 import { retrieveKnowledge } from "@/lib/agent/retrieval";
 import type { AgentKnowledgeItem } from "@/lib/agent/types";
-import { webSearch, type SearchProvider } from "@/lib/ai/web-search";
+import { webSearch, type SearchProvider, type SearchResult } from "@/lib/ai/web-search";
 import { chatWithProvider } from "@/lib/ai/providers";
 import { readAIConfig } from "@/lib/ai/config-store";
 
@@ -33,6 +33,13 @@ export interface SearchAgentSource {
   publisher?: string;
   publishedAt?: string;
   snippet?: string;
+  image?: string;
+  country?: string;
+  county?: string;
+  locations?: string[];
+  topics?: string[];
+  verified?: boolean;
+  viaGoogleNews?: boolean;
   evidence: "sihu" | "web";
 }
 
@@ -252,10 +259,7 @@ function toSearchAgentSource(item: AgentKnowledgeItem): SearchAgentSource {
   };
 }
 
-function toWebSource(
-  result: { url: string; title: string; snippet: string; publishedAt?: string; publisher?: string },
-  index: number
-): SearchAgentSource {
+function toWebSource(result: SearchResult, index: number): SearchAgentSource {
   return {
     id: `web-${index}`,
     title: result.title,
@@ -265,6 +269,13 @@ function toWebSource(
     publisher: result.publisher,
     publishedAt: result.publishedAt,
     snippet: result.snippet,
+    image: result.image,
+    country: result.country,
+    county: result.county,
+    locations: result.locations,
+    topics: result.topics,
+    verified: result.verified,
+    viaGoogleNews: result.viaGoogleNews,
     evidence: "web",
   };
 }

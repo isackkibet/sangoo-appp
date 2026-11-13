@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import SihuLogo from "@/components/brand/SihuLogo";
 
 export default function AdminLayout({
   children,
@@ -54,9 +53,9 @@ export default function AdminLayout({
       <aside className="w-full md:w-64 bg-slate-900 text-white shrink-0 md:min-h-screen flex flex-col">
         <div className="p-6">
             <div className="flex items-center gap-3 mb-8">
-                <Link href="/" aria-label="Sango Information Hub (SIHU) — home" className="shrink-0 rounded-xl shadow-[0_0_15px_rgba(88,179,242,0.4)]">
-                    <SihuLogo variant="mark" onDark alt="" className="h-9" />
-                </Link>
+                <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(88,179,242,0.4)]">
+                    <span className="text-white font-heading font-bold text-xl">SH</span>
+                </div>
                 <div>
                    <h2 className="font-bold text-lg leading-tight uppercase tracking-wider">Dashboard</h2>
                    <span className="text-[10px] text-slate-400">Content Manager</span>

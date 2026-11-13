@@ -64,14 +64,12 @@ export default function RightSidebar() {
         </div>
       )}
 
-      {/* Suggestions: only shown when there are any (the list was always empty, leaving an orphan heading). */}
-      {MEDIA_SUGGESTED_USERS.length > 0 && (
       <div>
         <div className="flex items-center justify-between mb-3">
           <span className="text-[13px] font-semibold text-slate-500">Suggested for you</span>
-          <Link href="/media/explore" className="text-[12px] font-semibold text-slate-900 hover:text-slate-600">
+          <button className="text-[12px] font-semibold text-slate-900 hover:text-slate-600">
             See all
-          </Link>
+          </button>
         </div>
         <div className="flex flex-col gap-3">
           {MEDIA_SUGGESTED_USERS.map(u => (
@@ -92,41 +90,20 @@ export default function RightSidebar() {
                   {u.mutual_count > 0 ? `${u.mutual_count} mutual` : 'Suggested'}
                 </p>
               </div>
-              <Link href="/media/explore" className="text-[12px] font-semibold text-sky-600 hover:text-sky-700 transition-colors">
-                View
-              </Link>
+              <button className="text-[12px] font-semibold text-sky-600 hover:text-sky-700 transition-colors">
+                Follow
+              </button>
             </div>
-          ))}
-        </div>
-      </div>
-      )}
-
-      {/* Quick links to the rest of SIHU */}
-      <div className="rounded-2xl border border-slate-200 p-4">
-        <p className="text-[13px] font-semibold text-slate-900">More from SIHU</p>
-        <div className="mt-2 grid grid-cols-2 gap-1 text-[12.5px]">
-          {[
-            { href: '/portal', label: 'News' },
-            { href: '/map', label: 'Basin map' },
-            { href: '/ai', label: 'AI Assistant' },
-            { href: '/portal/submit', label: 'Submit a story' },
-          ].map(l => (
-            <Link key={l.href} href={l.href} className="px-2 py-1.5 rounded-lg text-slate-600 hover:bg-slate-50 hover:text-sky-700">{l.label}</Link>
           ))}
         </div>
       </div>
 
       <div className="text-[11px] text-slate-400 space-y-1">
         <div className="flex flex-wrap gap-x-2 gap-y-1">
-          {[
-            { label: 'About', href: '/#story' },
-            { label: 'Help', href: '/#contact' },
-            { label: 'Locations', href: '/map' },
-            { label: 'Contact', href: '/#contact' },
-          ].map(l => (
-            <Link key={l.label} href={l.href} className="hover:underline">
-              {l.label}
-            </Link>
+          {['About', 'Help', 'Press', 'Privacy', 'Terms', 'Locations'].map(l => (
+            <a key={l} href="#" className="hover:underline">
+              {l}
+            </a>
           ))}
         </div>
         <p className="mt-1">© 2026 SIHU Media · Sango Information Hub</p>

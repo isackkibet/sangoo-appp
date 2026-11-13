@@ -238,10 +238,7 @@ export async function listPosts(options: ListPostsOptions): Promise<FeedResponse
 
   const order =
     options.scope === "explore"
-      ? // Postgres can't use SELECT aliases inside an ORDER BY expression
-        // ("column like_count does not exist"), which broke Explore for everyone.
-        `ORDER BY ((SELECT COUNT(*) FROM media_likes ml2 WHERE ml2.post_id = p.id) * 2
-                 + (SELECT COUNT(*) FROM media_comments mc2 WHERE mc2.post_id = p.id) * 3) DESC, p.created_at DESC`
+      ? `ORDER BY (like_count * 2 + comment_count * 3) DESC, p.created_at DESC`
       : `ORDER BY p.created_at DESC`;
 
   const sql = getSql();

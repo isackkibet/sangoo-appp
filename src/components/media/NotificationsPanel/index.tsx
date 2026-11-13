@@ -1,10 +1,10 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useState } from 'react';
-import { X, RefreshCw, Bell } from 'lucide-react';
+import { useState } from 'react';
+import { X, UserCheck } from 'lucide-react';
 import { useMediaNotificationsStore } from '@/store/media/modalStores';
-import type { MediaNotification } from '@/lib/media/types';
+import { MEDIA_NOTIFICATIONS, type MediaNotification } from '@/lib/media/mockData';
 
 const FILTERS = ['All', 'Follows', 'Comments', 'Likes'];
 
@@ -18,16 +18,6 @@ function timeAgo(iso: string) {
 
 function NotificationRow({ n }: { n: MediaNotification }) {
   const [following, setFollowing] = useState(false);
-  const [busy, setBusy] = useState(false);
-  // Real follow / unfollow (this button used to only flip local state).
-  const toggleFollow = async () => {
-    if (busy) return;
-    setBusy(true);
-    try {
-      const r = await fetch(`/api/media/users/${encodeURIComponent(n.actor.username)}/follow`, { method: 'POST' });
-      if (r.ok) { const d = (await r.json()) as { following: boolean; pending: boolean }; setFollowing(d.following || d.pending); }
-    } finally { setBusy(false); }
-  };
 
   return (
     <div className={`flex items-center gap-3 py-2.5 px-1 rounded-xl ${!n.read ? 'bg-sky-50' : ''}`}>
@@ -53,8 +43,7 @@ function NotificationRow({ n }: { n: MediaNotification }) {
       </div>
       {n.type === 'follow' ? (
         <button
-          onClick={toggleFollow}
-          disabled={busy}
+          onClick={() => setFollowing(v => !v)}
           className={`shrink-0 px-4 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
             following
               ? 'bg-slate-100 text-slate-700 hover:bg-slate-200'
@@ -79,29 +68,10 @@ function NotificationRow({ n }: { n: MediaNotification }) {
 export default function NotificationsPanel() {
   const { isOpen, close } = useMediaNotificationsStore();
   const [filter, setFilter] = useState('All');
-  const [state, setState] = useState<'loading' | 'error' | 'ready'>('loading');
-  const [items, setItems] = useState<MediaNotification[]>([]);
-  const [attempt, setAttempt] = useState(0);
-
-  // Load the member's real notifications whenever the panel opens, then mark them read.
-  useEffect(() => {
-    if (!isOpen) return;
-    let alive = true;
-    fetch('/api/media/notifications')
-      .then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((d: { notifications: MediaNotification[]; unread: number }) => {
-        if (!alive) return;
-        setItems(d.notifications);
-        setState('ready');
-        if (d.unread > 0) void fetch('/api/media/notifications', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
-      })
-      .catch(() => alive && setState('error'));
-    return () => { alive = false; };
-  }, [isOpen, attempt]);
 
   if (!isOpen) return null;
 
-  const filtered = items.filter(n => {
+  const filtered = MEDIA_NOTIFICATIONS.filter(n => {
     if (filter === 'All') return true;
     if (filter === 'Follows') return n.type === 'follow';
     if (filter === 'Comments') return n.type === 'comment';
@@ -135,23 +105,8 @@ export default function NotificationsPanel() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-1">
-          {state === 'loading' ? (
-            <div className="space-y-2 animate-pulse" aria-busy="true" aria-label="Loading notifications">
-              {[0, 1, 2, 3].map(i => <div key={i} className="h-14 rounded-xl bg-slate-100" />)}
-            </div>
-          ) : state === 'error' ? (
-            <div className="text-center py-12" role="alert">
-              <p className="text-slate-700 text-sm font-semibold">Notifications could not be loaded.</p>
-              <button onClick={() => { setState('loading'); setAttempt(a => a + 1); }} className="mt-3 inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-900 text-white text-[12.5px] font-semibold hover:bg-sky-600">
-                <RefreshCw size={13} /> Try again
-              </button>
-            </div>
-          ) : filtered.length === 0 ? (
-            <div className="text-center py-12">
-              <span className="mx-auto w-12 h-12 rounded-full bg-slate-100 text-slate-400 flex items-center justify-center"><Bell size={20} /></span>
-              <p className="text-slate-700 text-sm font-semibold mt-3">{filter === 'All' ? 'No notifications yet' : `No ${filter.toLowerCase()} yet`}</p>
-              <p className="text-slate-400 text-[12.5px] mt-1">Likes, comments and new followers will show up here.</p>
-            </div>
+          {filtered.length === 0 ? (
+            <p className="text-center text-slate-400 text-sm py-12">No notifications</p>
           ) : (
             filtered.map(n => <NotificationRow key={n.id} n={n} />)
           )}

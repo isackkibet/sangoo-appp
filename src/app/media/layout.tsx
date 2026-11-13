@@ -5,7 +5,7 @@ import MediaOverlays from '@/components/media/MediaOverlays';
 import { getSessionUser } from '@/lib/auth';
 
 export const metadata: Metadata = {
-  title: 'Media',
+  title: 'SIHU Media | Sango Information Hub',
   description: 'Share and discover photos, videos and stories from the Lake Victoria Basin community.',
 };
 

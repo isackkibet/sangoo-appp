@@ -49,24 +49,6 @@ function SectionHead({ id, title, sub, children }: { id?: string; title: string;
   );
 }
 
-/** Friendly empty state with a next step, used when a section has no content yet. */
-function EmptyState({ Icon, title, text, action }: { Icon: typeof Camera; title: string; text: string; action?: { href: string; label: string } }) {
-  return (
-    <div className="flex flex-col sm:flex-row sm:items-center gap-5 p-6 md:p-8 bg-white rounded-3xl border border-dashed border-slate-300">
-      <span className="w-12 h-12 shrink-0 rounded-2xl bg-sky-50 text-sky-700 flex items-center justify-center"><Icon size={22} /></span>
-      <div className="flex-1 min-w-0">
-        <p className="font-heading text-[17px] font-bold text-slate-900">{title}</p>
-        <p className="text-[14.5px] text-slate-500 leading-relaxed mt-1 max-w-2xl">{text}</p>
-      </div>
-      {action && (
-        <Link href={action.href} className="shrink-0 inline-flex items-center justify-center gap-1.5 px-5 py-2.5 rounded-full bg-slate-900 hover:bg-sky-600 text-white text-[13.5px] font-semibold transition-colors">
-          {action.label} <ArrowRight size={15} />
-        </Link>
-      )}
-    </div>
-  );
-}
-
 export default function NewsPortal() {
   const [articles, setArticles] = useState<Article[]>([]);
   const [podcasts, setPodcasts] = useState<Podcast[]>([]);
@@ -107,11 +89,8 @@ export default function NewsPortal() {
           kaiMedia().catch(() => []),
         ]);
         setArticles(articlesData);
-        // Posts from the SIHU admin come first, then the site's own. Only
-        // episodes that can actually be played are listed (the built-in
-        // samples have no audio, so they were dead cards).
-        const playable = (p: Podcast) => Boolean((p as Podcast & { url?: string }).url);
-        setPodcasts([...hubPodcasts, ...podcastsData].filter(playable));
+        // Posts from the SIHU admin come first, then the site's own.
+        setPodcasts([...hubPodcasts, ...podcastsData]);
         setEvents([...hubEvents, ...eventsData]);
         setMedia(hubMedia);
       } catch (error) {
@@ -125,10 +104,6 @@ export default function NewsPortal() {
     };
 
     loadData();
-
-    // Links such as /portal?q=Kisumu (from the basin map) open a search.
-    const q = new URLSearchParams(window.location.search).get("q");
-    if (q) setSearchTerm(q.slice(0, 80));
 
     const storedTicker = localStorage.getItem("sango_ticker");
     setTickerItems(storedTicker ? JSON.parse(storedTicker) : defaultTicker);
@@ -241,11 +216,9 @@ export default function NewsPortal() {
           </label>
           <nav className="flex flex-wrap items-center gap-x-4 gap-y-2 mt-6 text-[14px] font-semibold text-slate-200" aria-label="Sections">
             <a href="#latest-news" className="hover:text-white transition-colors">All stories</a>
-            <a href="#media" className="hover:text-white transition-colors">Photos &amp; videos</a>
+            {media.length > 0 && <a href="#media" className="hover:text-white transition-colors">Photos &amp; videos</a>}
             <a href="#podcasts" className="hover:text-white transition-colors">Podcasts</a>
-            <a href="#events" className="hover:text-white transition-colors">Events</a>
-            <Link href="/media/feed" className="hover:text-white transition-colors">Community reports</Link>
-            <Link href="/map" className="hover:text-white transition-colors">Basin map</Link>
+            {events.length > 0 && <a href="#events" className="hover:text-white transition-colors">Events</a>}
             <div className="ml-auto flex flex-wrap gap-2">
               <Link href="/portal/submit" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500 hover:bg-sky-400 text-white text-[12px] font-semibold transition-colors">
                 + Article
@@ -343,9 +316,9 @@ export default function NewsPortal() {
         </section>
 
         {/* Photos & videos - published by the SIHU admin */}
-        <section>
-          <SectionHead id="media" title="Photos & videos" sub="From the field around the basin">
-            {media.length > 0 && (
+        {media.length > 0 && (
+          <section>
+            <SectionHead id="media" title="Photos & videos" sub="From the field around the basin">
               <div className="flex gap-2" role="tablist" aria-label="Show">
                 {(["all", "photo", "video"] as const).map((f) => (
                   <button key={f} role="tab" aria-selected={mediaFilter === f} onClick={() => setMediaFilter(f)}
@@ -354,20 +327,7 @@ export default function NewsPortal() {
                   </button>
                 ))}
               </div>
-            )}
-          </SectionHead>
-          {!loaded ? (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-5 animate-pulse" aria-label="Loading photos and videos">
-              {[0, 1, 2, 3].map((i) => <div key={i} className="aspect-[4/3] rounded-2xl bg-slate-200" />)}
-            </div>
-          ) : media.length === 0 ? (
-            <EmptyState
-              Icon={Camera}
-              title="No photos or videos published yet"
-              text="Field photos and videos from the SIHU desk appear here. Community members also share reports from around the lake."
-              action={{ href: "/media/feed", label: "See community reports" }}
-            />
-          ) : (
+            </SectionHead>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-5">
               {shownMedia.map((m, i) => (
                 <button key={m.id} onClick={() => setOpenMedia(i)}
@@ -388,23 +348,14 @@ export default function NewsPortal() {
                 </button>
               ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
         {/* Podcasts */}
         <section>
           <SectionHead id="podcasts" title="Podcasts" sub="Listen to conversations and reports from the basin" />
-          {!loaded ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-5 animate-pulse" aria-label="Loading podcasts">
-              {[0, 1, 2].map((i) => <div key={i} className="h-28 rounded-2xl bg-slate-200" />)}
-            </div>
-          ) : podcasts.length === 0 ? (
-            <EmptyState
-              Icon={Headphones}
-              title="No podcast episodes published yet"
-              text="Have a radio programme or podcast about the basin? Share it with the SIHU editors."
-              action={{ href: "/portal/submit/podcast", label: "Submit a podcast" }}
-            />
+          {podcasts.length === 0 ? (
+            <p className="text-slate-500">New episodes are coming soon.</p>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {podcasts.map((podcast) => {
@@ -433,20 +384,9 @@ export default function NewsPortal() {
         </section>
 
         {/* Events and activities */}
-        <section className="pb-6">
-          <SectionHead id="events" title="Events & activities" sub="What is happening around the lake" />
-          {!loaded ? (
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-5 animate-pulse" aria-label="Loading events">
-              {[0, 1, 2, 3].map((i) => <div key={i} className="h-32 rounded-2xl bg-slate-200" />)}
-            </div>
-          ) : events.length === 0 ? (
-            <EmptyState
-              Icon={CalendarDays}
-              title="No events listed right now"
-              text="Organising a clean-up, forum or training around the lake? Tell the SIHU team and we will list it."
-              action={{ href: "/portal/submit/event", label: "Submit an event" }}
-            />
-          ) : (
+        {events.length > 0 && (
+          <section className="pb-6">
+            <SectionHead id="events" title="Events & activities" sub="What is happening around the lake" />
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
               {events.map((event) => {
                 const url = (event as Event & { url?: string }).url;
@@ -473,8 +413,8 @@ export default function NewsPortal() {
                 );
               })}
             </div>
-          )}
-        </section>
+          </section>
+        )}
       </div>
 
       {/* Photo and video viewer */}

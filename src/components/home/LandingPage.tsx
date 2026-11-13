@@ -8,10 +8,6 @@ import {
   ArrowRight, Megaphone, Leaf, Eye, ShieldAlert, Newspaper, Users, Coins, Building2, Laptop, ShieldCheck,
   MapPin, Mail, Phone, Bot, Send, MessageCircle, CheckCircle2,
 } from "lucide-react";
-import ExploreFeatures from "./ExploreFeatures";
-import LatestStories from "./LatestStories";
-import CommunityReports from "./CommunityReports";
-import BasinSection from "./BasinSection";
 
 /*
  * The SIHU home page: who SIHU is, what it does, the latest stories, and
@@ -40,12 +36,11 @@ const OBJECTIVES = [
   { Icon: ShieldCheck, title: "Eco watchdog", text: "Demanding accountability on preserving the Lake Victoria ecosystem and generating stories that drive environmental protection and conservation action." },
 ];
 
-/* Facts about the lake and basin (not site metrics — live SIHU numbers are in BasinSection). */
 const STATS = [
-  { value: "10", label: "counties in the Kenyan basin" },
-  { value: "40M+", label: "people depend on Lake Victoria" },
-  { value: "3", label: "countries share Lake Victoria" },
-  { value: "700–2,000 mm", label: "annual rainfall across the basin" },
+  { value: 10, suffix: "", label: "counties in the Kenyan basin" },
+  { value: 40, suffix: "M+", label: "people depend on Lake Victoria" },
+  { value: 3, suffix: "", label: "countries share Lake Victoria" },
+  { value: 700, suffix: "mm–2000mm", label: "annual rainfall range across the basin" },
 ];
 
 const fade = {
@@ -107,18 +102,15 @@ export default function LandingPage() {
         <div className="container mx-auto max-w-7xl px-4 lg:px-8 py-10 grid grid-cols-2 md:grid-cols-4 gap-4">
           {STATS.map((s, i) => (
             <motion.div key={s.label} variants={fade} initial="hidden" whileInView="show" viewport={{ once: true }} custom={i}>
-              <p className="font-heading text-2xl sm:text-4xl md:text-5xl font-bold text-sky-300 leading-tight">{s.value}</p>
+              <p className="font-heading text-2xl sm:text-4xl md:text-5xl font-bold text-sky-300 break-all leading-tight">{s.value}{s.suffix}</p>
               <p className="text-[13px] text-slate-300 mt-1 leading-snug">{s.label}</p>
             </motion.div>
           ))}
         </div>
       </section>
 
-      <ExploreFeatures />
-      <LatestStories />
-
       {/* ===== INTRODUCTION (2-column, world map background — mirrors old SIHU) ===== */}
-      <section id="about" className="scroll-mt-20 relative py-16 md:py-28 overflow-hidden">
+      <section className="relative py-16 md:py-28 overflow-hidden">
         <Image src="/images/Map.png" alt="" fill sizes="100vw" className="object-contain object-center opacity-100" />
         <div className="absolute inset-0 bg-white/60 sm:bg-white/40" />
         <div className="relative container mx-auto max-w-7xl px-4 lg:px-8">
@@ -220,7 +212,7 @@ export default function LandingPage() {
 
             {/* Floating info card */}
             <div className="mt-6 md:absolute md:-bottom-6 md:-left-4 lg:-left-8 bg-white rounded-2xl shadow-xl p-4 flex items-center gap-3 max-w-[280px] mx-auto md:mx-0">
-              <Image src="/images/sihu-mark.png" alt="" width={48} height={48} className="w-12 h-12 object-contain shrink-0" />
+              <Image src="/images/logo-main.png" alt="Sango Information Hub" width={48} height={48} className="w-12 h-auto object-contain shrink-0" />
               <div>
                 <p className="font-bold text-[15px] leading-tight">Sango Information Hub</p>
                 <p className="text-[13px] text-slate-500">We care about Lake Victoria</p>
@@ -229,9 +221,6 @@ export default function LandingPage() {
           </motion.div>
         </div>
       </section>
-
-      <BasinSection />
-      <CommunityReports />
 
       {/* ===== WHAT WE STAND FOR ===== */}
       <section id="pillars" className="scroll-mt-20 relative overflow-hidden bg-slate-950 text-white py-20 md:py-28">

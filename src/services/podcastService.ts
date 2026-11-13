@@ -10,10 +10,6 @@ const hasSupabase =
 export const podcastService = {
   getPodcasts: async (): Promise<Podcast[]> => {
     if (!hasSupabase) return getPodcastsFromStorage();
-    // The Supabase "podcasts" table may not exist yet (see supabase-schema.sql);
-    // once we've seen that, don't re-request it (a 404) on every page view.
-    const MISSING = 'sihu_podcasts_table_missing';
-    if (typeof sessionStorage !== 'undefined' && sessionStorage.getItem(MISSING)) return getPodcastsFromStorage();
 
     try {
       const { supabase } = await import('../utils/supabase/client');
@@ -22,9 +18,6 @@ export const podcastService = {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error?.code === 'PGRST205' || error?.code === '42P01') {
-        if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(MISSING, '1');
-      }
       if (error || !data || data.length === 0) return getPodcastsFromStorage();
 
       return data.map((p: Record<string, unknown>) => ({
@@ -34,8 +27,6 @@ export const podcastService = {
         duration: p.duration as string,
         image: (p.image || p.image_url) as string,
         type: 'podcast' as const,
-        // Without this the episode card has nothing to play.
-        url: ((p.audio_url || p.url) as string | undefined) || undefined,
       }));
     } catch {
       return getPodcastsFromStorage();
