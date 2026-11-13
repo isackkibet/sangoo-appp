@@ -14,9 +14,7 @@ const LINKS = [
   { name: "News", href: "/portal" },
   { name: "Media", href: "/media/feed", special: true },
   { name: "AI Hub", href: "/ai" },
-  { name: "DApp", href: "/dapp" },
-  { name: "Play", href: "/play" },
-  { name: "Verify", href: "/verify", special: true },
+  
 ];
 
 export default function NewsHeader() {

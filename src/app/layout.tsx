@@ -115,12 +115,11 @@ export default function RootLayout({
                </div>
                <div>
                   <h4 className="font-bold mb-5 text-[14px] text-white">Explore</h4>
-                  <ul className="space-y-4 text-slate-400 font-medium text-sm">
-                    <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
-                    <li><Link href="/dapp" className="hover:text-white transition-colors">DApp Dashboard</Link></li>
-                    <li><Link href="/login?next=/media/feed" className="hover:text-white transition-colors">Member Log In</Link></li>
-                    <li><Link href="/#contact" className="hover:text-white transition-colors">Contact us</Link></li>
-                  </ul>
+<ul className="space-y-4 text-slate-400 font-medium text-sm">
+                     <li><Link href="/" className="hover:text-white transition-colors">Home</Link></li>
+                     <li><Link href="/login?next=/media/feed" className="hover:text-white transition-colors">Member Log In</Link></li>
+                     <li><Link href="/#contact" className="hover:text-white transition-colors">Contact us</Link></li>
+                   </ul>
                </div>
             </div>
             <div className="border-t border-white/10 mt-16 pt-8 flex flex-col md:flex-row justify-between items-center gap-4">
