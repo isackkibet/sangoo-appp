@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import NewsHero from "./NewsHero";
 import NewsCategories from "./NewsCategories";
+import SangoNewsVideos from "./SangoNewsVideos";
 import Link from "next/link";
 import Image from "next/image";
 import { Article, defaultTicker, Podcast, Event } from "@/constants/articles";
@@ -218,6 +219,7 @@ export default function NewsPortal() {
             <a href="#latest-news" className="hover:text-white transition-colors">All stories</a>
             {media.length > 0 && <a href="#media" className="hover:text-white transition-colors">Photos &amp; videos</a>}
             <a href="#podcasts" className="hover:text-white transition-colors">Podcasts</a>
+            <a href="#sango-news" className="hover:text-white transition-colors">Sango News</a>
             {events.length > 0 && <a href="#events" className="hover:text-white transition-colors">Events</a>}
             <div className="ml-auto flex flex-wrap gap-2">
               <Link href="/portal/submit" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-sky-500 hover:bg-sky-400 text-white text-[12px] font-semibold transition-colors">
@@ -382,6 +384,9 @@ export default function NewsPortal() {
             </div>
           )}
         </section>
+
+        {/* Sango News videos */}
+        <SangoNewsVideos />
 
         {/* Events and activities */}
         {events.length > 0 && (
