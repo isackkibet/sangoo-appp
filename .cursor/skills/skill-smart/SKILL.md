@@ -1,5 +1,5 @@
 ---
-name: sihu-agent
+name: skill-smart
 description: Design, build, and extend the SIHU Agent retrieval-first assistant. Use when working on the SIHU chat assistant, Next.js server routes, Supabase knowledge base, semantic search, chat history, deterministic response logic, or LLM-free agent workflows.
 ---
 
