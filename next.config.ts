@@ -35,11 +35,11 @@ const nextConfig: NextConfig = {
   turbopack: {},
 
   images: {
-    formats: ["image/avif", "image/webp"],
+    // Serve images straight from their source (Supabase CDN, YouTube, etc.).
+    // Vercel's Image Optimization cache was using 13+ GB of the free storage,
+    // so we no longer generate/cached resized variants on Vercel.
+    unoptimized: true,
     remotePatterns: [{ protocol: "https", hostname: "**" }],
-    deviceSizes: [640, 750, 828, 1080, 1200, 1920, 2048],
-    imageSizes: [16, 32, 48, 64, 96, 128, 256],
-    qualities: [75, 85, 90],
   },
 
   compress: true,
