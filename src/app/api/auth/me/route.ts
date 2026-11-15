@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getSessionUser, googleOAuthConfigured } from "@/lib/auth";
+import { getSessionUser, googleOAuthConfigured, isPlatformAdmin } from "@/lib/auth";
 import { hasDatabase } from "@/lib/db";
 
 export const runtime = "nodejs";
@@ -10,6 +10,7 @@ export async function GET() {
   return NextResponse.json(
     {
       user,
+      isAdmin: isPlatformAdmin(user),
       available: hasDatabase,
       googleEnabled: googleOAuthConfigured(),
     },

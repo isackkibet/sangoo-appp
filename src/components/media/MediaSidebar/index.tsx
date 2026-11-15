@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  Home, Search, Compass, Film, Send, Heart, PlusSquare, User, ArrowLeft,
+  Home, Search, Compass, Film, Send, Heart, PlusSquare, User, ArrowLeft, ShieldCheck,
 } from 'lucide-react';
 import { useMediaSearchStore, useMediaNotificationsStore, useCreatePostStore } from '@/store/media/modalStores';
 
@@ -19,12 +19,12 @@ interface NavItem {
   Icon: React.ElementType;
 }
 
-function useNav(): NavItem[] {
+function useNav(isAdmin: boolean): NavItem[] {
   const { open: openSearch } = useMediaSearchStore();
   const { open: openNotifs } = useMediaNotificationsStore();
   const { open: openCreate } = useCreatePostStore();
 
-  return [
+  const items: NavItem[] = [
     { label: 'Feed',       nav: { href: '/media/feed' },    Icon: Home },
     { label: 'Search',     nav: { action: openSearch },     Icon: Search },
     { label: 'Explore',    nav: { href: '/media/explore' }, Icon: Compass },
@@ -34,9 +34,15 @@ function useNav(): NavItem[] {
     { label: 'Create',     nav: { action: openCreate },     Icon: PlusSquare },
     { label: 'Profile',    nav: { href: '/media/profile' }, Icon: User },
   ];
+
+  if (isAdmin) {
+    items.push({ label: 'Admin', nav: { href: '/admin' }, Icon: ShieldCheck });
+  }
+
+  return items;
 }
 
-const MOBILE_LABELS = new Set(['Feed', 'Explore', 'Reels', 'Create', 'Profile']);
+const MOBILE_LABELS = new Set(['Feed', 'Explore', 'Reels', 'Create', 'Profile', 'Admin']);
 
 function NavLink({ item, on }: { item: NavItem; on: boolean }) {
   const cls = `flex items-center gap-4 px-3 py-3 rounded-xl text-[15px] transition-colors ${
@@ -81,8 +87,8 @@ function MobileNavItem({ item, on }: { item: NavItem; on: boolean }) {
 
 export default function MediaSidebar() {
   const path = usePathname() ?? '';
-  const navItems = useNav();
   const auth = useSihuAuth();
+  const navItems = useNav(auth.isAdmin);
 
   const profileName = auth.signedIn
     ? mediaUsername(auth.user?.name, auth.user?.email)

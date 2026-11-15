@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
   createSession,
   findUserByEmail,
+  isPlatformAdmin,
   normalizeEmail,
   publicUser,
   verifyPassword,
@@ -65,7 +66,10 @@ export async function POST(req: Request) {
     await createSession(user.id);
 
     return NextResponse.json(
-      { user: publicUser(user) },
+      {
+        user: publicUser(user),
+        isAdmin: isPlatformAdmin(publicUser(user)),
+      },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

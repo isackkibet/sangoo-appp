@@ -28,6 +28,7 @@ export interface SihuAuth {
   available: boolean;
   googleEnabled: boolean;
   signedIn: boolean;
+  isAdmin: boolean;
   user: SihuUser | null;
   email: string | null;
   name: string | null;
@@ -44,6 +45,7 @@ const EMPTY_AUTH: SihuAuth = {
   available: false,
   googleEnabled: false,
   signedIn: false,
+  isAdmin: false,
   user: null,
   email: null,
   name: null,
@@ -61,12 +63,14 @@ export const useSihuAuth = () => useContext(Ctx);
 
 type MeResponse = {
   user?: SihuUser | null;
+  isAdmin?: boolean;
   available?: boolean;
   googleEnabled?: boolean;
 };
 
 type AuthResponse = {
   user?: SihuUser;
+  isAdmin?: boolean;
   error?: string;
 };
 
@@ -74,6 +78,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
   const [ready, setReady] = useState(false);
   const [available, setAvailable] = useState(true);
   const [googleEnabled, setGoogleEnabled] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
   const [user, setUser] = useState<SihuUser | null>(null);
 
   const refresh = useCallback(async () => {
@@ -81,6 +86,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
       const response = await fetch("/api/auth/me", { cache: "no-store" });
       const data = (await response.json()) as MeResponse;
       setUser(data.user ?? null);
+      setIsAdmin(Boolean(data.isAdmin));
       setAvailable(data.available !== false);
       setGoogleEnabled(Boolean(data.googleEnabled));
     } catch {
@@ -116,6 +122,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
           return { ok: false, error: data.error ?? "Could not sign you in." };
         }
         setUser(data.user);
+        setIsAdmin(Boolean(data.isAdmin));
         setAvailable(true);
         setReady(true);
         return { ok: true };
@@ -139,6 +146,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
           return { ok: false, error: data.error ?? "Could not create your account." };
         }
         setUser(data.user);
+        setIsAdmin(Boolean(data.isAdmin));
         setAvailable(true);
         setReady(true);
         return { ok: true };
@@ -156,6 +164,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
       // Ignore network errors; clear local state anyway.
     }
     setUser(null);
+    setIsAdmin(false);
   }, []);
 
   const value = useMemo<SihuAuth>(
@@ -164,6 +173,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
       available,
       googleEnabled,
       signedIn: Boolean(user),
+      isAdmin,
       user,
       email: user?.email ?? null,
       name: user?.name ?? null,
@@ -178,6 +188,7 @@ export default function SihuAuthProvider({ children }: { children: React.ReactNo
       ready,
       available,
       googleEnabled,
+      isAdmin,
       user,
       signInWithGoogle,
       signInWithEmail,

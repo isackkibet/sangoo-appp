@@ -5,6 +5,7 @@ import {
   createSession,
   findUserByEmail,
   hashPassword,
+  isPlatformAdmin,
   normalizeEmail,
   publicUser,
   type UserRow,
@@ -88,7 +89,10 @@ export async function POST(req: Request) {
     await createSession(id);
 
     return NextResponse.json(
-      { user: publicUser(rows[0]) },
+      {
+        user: publicUser(rows[0]),
+        isAdmin: isPlatformAdmin(publicUser(rows[0])),
+      },
       { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
