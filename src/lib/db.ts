@@ -46,6 +46,12 @@ const SCHEMA_STATEMENTS = [
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_reason TEXT`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS reporter_verified BOOLEAN NOT NULL DEFAULT FALSE`,
   `ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ`,
+  // Encrypted admin-issued password, so admins can reveal/reset it from the
+  // Admins page. See src/lib/admin/accounts.ts.
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_password_enc TEXT`,
+  // Set when an env-listed owner admin is removed, so they stay a normal
+  // member instead of being re-granted admin by the env allowlist.
+  `ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_revoked BOOLEAN NOT NULL DEFAULT FALSE`,
   `UPDATE users
      SET username = COALESCE(
        NULLIF(LOWER(REGEXP_REPLACE(SPLIT_PART(email, '@', 1), '[^a-z0-9._]', '', 'g')), ''),
@@ -285,12 +291,28 @@ const SCHEMA_STATEMENTS = [
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`,
   `CREATE INDEX IF NOT EXISTS idx_media_reports_status ON media_reports (status, created_at DESC)`,
+
+  // ── Sango News videos (managed from /admin/videos) ──────────────────────
+  `CREATE TABLE IF NOT EXISTS sango_news_videos (
+    id TEXT PRIMARY KEY,
+    url TEXT NOT NULL,
+    title TEXT NOT NULL DEFAULT '',
+    description TEXT NOT NULL DEFAULT '',
+    source TEXT NOT NULL DEFAULT '',
+    published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`,
+  `CREATE INDEX IF NOT EXISTS idx_sango_news_videos_published ON sango_news_videos (published_at DESC)`,
+  `INSERT INTO sango_news_videos (id, url, title, description, source, published_at) VALUES
+    ('bumbe-fish-cage', 'https://youtu.be/PLbB6m2UlV0', 'New fish cage technology transforms fishing in Bumbe Village, Busia', 'A fishing revolution in Bumbe Village, Bunyala, Busia County, is quietly transforming lives along the shores of Lake Victoria. Fish cage farming has taken root, offering a safer and more sustainable alternative to traditional fishing methods.', 'KBC Channel 1', '2025-07-27T03:54:56-07:00'),
+    ('samia-bunyala-fish-farming', 'https://youtu.be/Bbijkfj3Sss', 'Fishermen in Samia and Bunyala in Busia County embrace tech in fish farming', 'Fishermen in Samia and Bunyala in Busia County are embracing technology in fish farming.', 'KTN News Kenya', '2025-07-31T03:43:23-07:00')
+   ON CONFLICT (id) DO NOTHING`,
 ];
 
 let schemaReady: Promise<void> | null = null;
 
 // Bump this when SCHEMA_STATEMENTS changes so the migration runs again.
-const SCHEMA_VERSION = 20261114;
+const SCHEMA_VERSION = 20261117;
 
 export function ensureSchema(): Promise<void> {
   if (!schemaReady) {

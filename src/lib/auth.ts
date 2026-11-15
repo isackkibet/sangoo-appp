@@ -39,6 +39,7 @@ export type AuthUser = {
   isPrivate: boolean;
   isSuspended: boolean;
   reporterVerified: boolean;
+  adminRevoked: boolean;
 };
 
 export type UserRow = {
@@ -59,6 +60,7 @@ export type UserRow = {
   is_private?: boolean;
   is_suspended?: boolean;
   reporter_verified?: boolean;
+  admin_revoked?: boolean;
 };
 
 export function normalizeEmail(email: string): string {
@@ -81,21 +83,33 @@ export function publicUser(row: UserRow): AuthUser {
     isPrivate: Boolean(row.is_private),
     isSuspended: Boolean(row.is_suspended),
     reporterVerified: Boolean(row.reporter_verified),
+    adminRevoked: Boolean(row.admin_revoked),
   };
 }
 
 export function adminEmails(): string[] {
-  return (process.env.SIHU_ADMIN_EMAILS ?? "")
+  const fromList = (process.env.SIHU_ADMIN_EMAILS ?? "")
     .split(",")
     .map((email) => normalizeEmail(email))
     .filter(Boolean);
+
+  const fromAccounts = (process.env.SIHU_ADMIN_ACCOUNTS ?? "")
+    .split(",")
+    .map((entry) => {
+      const separator = entry.indexOf(":");
+      return separator > 0 ? normalizeEmail(entry.slice(0, separator)) : "";
+    })
+    .filter(Boolean);
+
+  return Array.from(new Set([...fromList, ...fromAccounts]));
 }
 
 export function isPlatformAdmin(
-  user: Pick<AuthUser, "role" | "email"> | null,
+  user: Pick<AuthUser, "role" | "email" | "adminRevoked"> | null,
 ): boolean {
   if (!user) return false;
   if (user.role === "admin" || user.role === "moderator") return true;
+  if (user.adminRevoked) return false;
   return adminEmails().includes(normalizeEmail(user.email));
 }
 
@@ -163,6 +177,8 @@ function hashToken(token: string): string {
   return createHash("sha256").update(token).digest("hex");
 }
 
+const sessionLoads = new Map<string, Promise<AuthUser | null>>();
+
 export async function createSession(userId: string): Promise<void> {
   if (!hasDatabase) throw new Error("Database is not configured.");
 
@@ -201,21 +217,32 @@ export async function getSessionUser(): Promise<AuthUser | null> {
     const cachedUser = await cacheGet<AuthUser>(cacheKey);
     if (cachedUser) return cachedUser;
 
-    const sql = getSql();
-    const rows = (await sql.query(
-      `SELECT u.*
-       FROM sessions s
-       JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = $1 AND s.expires_at > NOW()
-       LIMIT 1`,
-      [tokenHash],
-    )) as UserRow[];
+    const pending = sessionLoads.get(tokenHash);
+    if (pending) return pending;
 
-    const row = rows[0];
-    if (!row) return null;
-    const user = publicUser(row);
-    await cacheSet(cacheKey, user, 20);
-    return user;
+    const load = (async () => {
+      try {
+        const sql = getSql();
+        const rows = (await sql.query(
+          `SELECT u.*
+           FROM sessions s
+           JOIN users u ON u.id = s.user_id
+           WHERE s.token_hash = $1 AND s.expires_at > NOW()
+           LIMIT 1`,
+          [tokenHash],
+        )) as UserRow[];
+
+        const row = rows[0];
+        if (!row) return null;
+        const user = publicUser(row);
+        await cacheSet(cacheKey, user, 120);
+        return user;
+      } finally {
+        sessionLoads.delete(tokenHash);
+      }
+    })();
+    sessionLoads.set(tokenHash, load);
+    return load;
   } catch (error) {
     console.error("Failed to read session:", error);
     return null;

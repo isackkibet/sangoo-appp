@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { ArrowRight, CalendarDays, ExternalLink, PlayCircle } from "lucide-react";
 import { getYouTubeThumbnail } from "@/lib/youtube";
-import { getSangoNewsVideos, type ResolvedSangoNewsVideo } from "@/services/sangoNewsVideoService";
+import {
+  fetchSangoNewsVideos,
+  getSangoNewsVideos,
+  type ResolvedSangoNewsVideo,
+} from "@/services/sangoNewsVideoService";
 
 function formatPublishedDate(value: string): string {
   const date = new Date(value);
@@ -50,7 +54,17 @@ function VideoThumbnail({ video }: { video: ResolvedSangoNewsVideo }) {
 }
 
 export default function SangoNewsVideos() {
-  const videos = useMemo(() => getSangoNewsVideos(), []);
+  const [videos, setVideos] = useState<ResolvedSangoNewsVideo[]>(() => getSangoNewsVideos());
+
+  useEffect(() => {
+    let active = true;
+    fetchSangoNewsVideos().then((next) => {
+      if (active) setVideos(next);
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
 
   if (videos.length === 0) return null;
 

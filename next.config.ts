@@ -7,9 +7,14 @@ const SUPABASE_ORIGIN = (() => {
   try { return new URL(process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").origin; } catch { return ""; }
 })();
 
+const isDev = process.env.NODE_ENV !== "production";
+const scriptSrc = isDev
+  ? "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://js.stripe.com"
+  : "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com";
+
 const CSP = [
   "default-src 'self'",
-  "script-src 'self' 'unsafe-inline' 'wasm-unsafe-eval' https://js.stripe.com",
+  scriptSrc,
   "worker-src 'self' blob:",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data: blob: https:",

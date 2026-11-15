@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireAdminRequest } from "@/lib/admin/api";
 import { readPublicAIConfig, writeAIConfig } from "@/lib/ai/config-store";
-import { clientIp, isAdmin, rateLimit } from "@/lib/security/guard";
+import { clientIp, rateLimit } from "@/lib/security/guard";
 
 export async function POST(req: NextRequest) {
   // Changing the AI keys decides who answers SIHU's visitors: admins only.
   const limited = rateLimit(`keys:${clientIp(req)}`, 5, 60_000);
   if (!limited.ok) return NextResponse.json({ success: false, message: "Too many tries. Wait a minute." }, { status: 429, headers: { "Retry-After": String(limited.retryAfter) } });
-  if (!isAdmin(req)) return NextResponse.json({ success: false, message: "Only SIHU admins can change these settings." }, { status: 401 });
+  try {
+    await requireAdminRequest(req);
+  } catch {
+    return NextResponse.json({ success: false, message: "Only SIHU admins can change these settings." }, { status: 401 });
+  }
   try {
     const body = await req.json();
     const { groq, openai, gemini, anthropic, activeProvider, models } = body as {

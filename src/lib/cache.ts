@@ -91,6 +91,10 @@ export async function cacheSet(
   memory.set(key, { value: serialized, expiresAt: Date.now() + ttl * 1000 });
 }
 
+export function cacheClearMemory(): void {
+  memory.clear();
+}
+
 export async function cacheDel(key: string): Promise<void> {
   if (cacheBackend() === "redis") {
     try {

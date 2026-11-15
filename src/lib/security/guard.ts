@@ -4,19 +4,32 @@ import { createHash, timingSafeEqual } from "node:crypto";
  * Small server-side guards for SIHU's API routes.
  *
  * isAdmin: the x-admin-key header must equal SIHU_ADMIN_KEY (set in
- * Vercel). Fails closed: with no key configured, nobody is an admin.
+ * Vercel) or ADMIN_PASSWORD. Fails closed: with no key configured, nobody
+ * is an admin. Local development falls back to a dev-only key.
  *
  * rateLimit: a per-IP counter per server instance. Vercel runs a few
  * instances, so this is a brake on abuse, not an exact quota.
  */
 
+const DEV_ADMIN_KEY = "sango-admin-dev-key";
+
+function adminKeys(): string[] {
+  const keys = [process.env.SIHU_ADMIN_KEY, process.env.ADMIN_PASSWORD]
+    .map((value) => value?.trim())
+    .filter((value): value is string => Boolean(value && value.length >= 8));
+  // Local development has no configured key by default. Production fails
+  // closed unless SIHU_ADMIN_KEY (or ADMIN_PASSWORD) is set.
+  if (process.env.NODE_ENV !== "production") keys.push(DEV_ADMIN_KEY);
+  return keys;
+}
+
 export function isAdmin(req: Request): boolean {
-  const configured = process.env.SIHU_ADMIN_KEY?.trim();
   const provided = req.headers.get("x-admin-key")?.trim();
-  if (!configured || configured.length < 16 || !provided) return false;
+  if (!provided) return false;
   const a = createHash("sha256").update(provided).digest();
-  const b = createHash("sha256").update(configured).digest();
-  return timingSafeEqual(a, b);
+  return adminKeys().some((key) =>
+    timingSafeEqual(a, createHash("sha256").update(key).digest()),
+  );
 }
 
 export function clientIp(req: Request): string {

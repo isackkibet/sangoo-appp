@@ -17,7 +17,6 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { useSihuAuth } from "@/components/auth/SihuAuth";
-import { KAI_URL } from "@/services/kaiHubService";
 
 /** Where to go after signing in: a same-site path only. */
 const safeNext = (v: string | null) => (v && /^\/(?![/\\])/.test(v) && !v.startsWith("/login") ? v : null);
@@ -303,13 +302,6 @@ export default function LoginPage() {
                   </div>
                 )}
 
-                <div className="mt-10 pt-6 border-t border-slate-200">
-                  <p className="text-[14px] font-semibold text-slate-800">SIHU editors</p>
-                  <p className="text-[13.5px] text-slate-500 mt-1 leading-relaxed">
-                    Publish news, photos and videos from the{" "}
-                    <a href={`${KAI_URL}/hubs/sihu/admin`} className="font-semibold text-sky-700 hover:text-sky-900">Information Hub admin</a>.
-                  </p>
-                </div>
               </>
             )}
           </div>

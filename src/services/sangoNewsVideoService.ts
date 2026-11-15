@@ -7,8 +7,8 @@ export type ResolvedSangoNewsVideo = SangoNewsVideo & {
   watchUrl: string;
 };
 
-export function getSangoNewsVideos(): ResolvedSangoNewsVideo[] {
-  return sangoNewsVideos.flatMap((video) => {
+export function resolveSangoNewsVideos(videos: SangoNewsVideo[]): ResolvedSangoNewsVideo[] {
+  return videos.flatMap((video) => {
     const youtubeId = extractYouTubeId(video.url);
     if (!youtubeId) return [];
 
@@ -21,4 +21,20 @@ export function getSangoNewsVideos(): ResolvedSangoNewsVideo[] {
       },
     ];
   });
+}
+
+export function getSangoNewsVideos(): ResolvedSangoNewsVideo[] {
+  return resolveSangoNewsVideos(sangoNewsVideos);
+}
+
+export async function fetchSangoNewsVideos(): Promise<ResolvedSangoNewsVideo[]> {
+  try {
+    const res = await fetch("/api/sango-news", { cache: "no-store" });
+    if (!res.ok) throw new Error("Could not load videos.");
+    const data = (await res.json()) as { videos?: SangoNewsVideo[] };
+    if (Array.isArray(data.videos)) return resolveSangoNewsVideos(data.videos);
+  } catch {
+    // Fall back to the bundled links when the database is unavailable.
+  }
+  return getSangoNewsVideos();
 }

@@ -118,7 +118,7 @@ export async function listReports(
 
 export async function updateReportStatus(
   reportId: string,
-  reviewerId: string,
+  reviewerId: string | null,
   status: string,
 ): Promise<boolean> {
   if (!REPORT_STATUSES.has(status)) throw new Error("Invalid report status.");
@@ -234,6 +234,164 @@ export async function moderateUser(
     await sql.query("DELETE FROM sessions WHERE user_id = $1", [userId]);
   }
   return rows.length > 0;
+}
+
+export type AdminPostRow = {
+  id: string;
+  caption: string;
+  type: string;
+  category: string;
+  visibility: string;
+  created_at: string;
+  image_url: string | null;
+  image_kind: string | null;
+  like_count: number;
+  comment_count: number;
+  share_count: number;
+  author: { id: string; username: string; full_name: string; avatar_url: string };
+};
+
+export async function listAdminPosts(query = "", limit = 40): Promise<AdminPostRow[]> {
+  const sql = getSql();
+  const q = query.trim();
+  const rows = (await sql.query(
+    `SELECT p.id, p.caption, p.type, p.category, p.visibility, p.created_at,
+            u.id AS author_id, u.username, u.name AS author_name,
+            u.email AS author_email, u.avatar_url AS author_avatar,
+            (SELECT COALESCE(i.poster_url, i.url) FROM media_images i WHERE i.post_id = p.id ORDER BY i.position LIMIT 1) AS image_url,
+            (SELECT kind FROM media_images i WHERE i.post_id = p.id ORDER BY i.position LIMIT 1) AS image_kind,
+            (SELECT COUNT(*)::int FROM media_likes l WHERE l.post_id = p.id) AS like_count,
+            (SELECT COUNT(*)::int FROM media_comments c WHERE c.post_id = p.id) AS comment_count,
+            (SELECT COUNT(*)::int FROM media_post_shares s WHERE s.post_id = p.id) AS share_count
+     FROM media_posts p
+     JOIN users u ON u.id = p.user_id
+     WHERE ($1 = '' OR p.caption ILIKE $2 OR u.username ILIKE $2 OR u.name ILIKE $2)
+     ORDER BY p.created_at DESC
+     LIMIT $3`,
+    [q, `%${q}%`, Math.min(Math.max(limit, 1), 100)],
+  )) as Row[];
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    caption: String(row.caption ?? ""),
+    type: String(row.type ?? "post"),
+    category: String(row.category ?? "community"),
+    visibility: String(row.visibility ?? "public"),
+    created_at: new Date(row.created_at as string | Date).toISOString(),
+    image_url: (row.image_url as string | null) ?? null,
+    image_kind: (row.image_kind as string | null) ?? null,
+    like_count: Number(row.like_count) || 0,
+    comment_count: Number(row.comment_count) || 0,
+    share_count: Number(row.share_count) || 0,
+    author: {
+      id: String(row.author_id),
+      username:
+        (row.username as string) ||
+        mediaUsername(row.author_name as string, row.author_email as string),
+      full_name: mediaFullName(row.author_name as string, row.author_email as string),
+      avatar_url: mediaAvatar(
+        row.author_name as string,
+        row.author_email as string,
+        row.author_avatar as string,
+      ),
+    },
+  }));
+}
+
+export type AdminCommentRow = {
+  id: string;
+  content: string;
+  created_at: string;
+  post_id: string;
+  post_caption: string;
+  author: { id: string; username: string; full_name: string; avatar_url: string };
+};
+
+export async function listAdminComments(query = "", limit = 40): Promise<AdminCommentRow[]> {
+  const sql = getSql();
+  const q = query.trim();
+  const rows = (await sql.query(
+    `SELECT c.id, c.content, c.created_at, c.post_id, p.caption AS post_caption,
+            u.id AS author_id, u.username, u.name AS author_name,
+            u.email AS author_email, u.avatar_url AS author_avatar
+     FROM media_comments c
+     JOIN users u ON u.id = c.user_id
+     JOIN media_posts p ON p.id = c.post_id
+     WHERE ($1 = '' OR c.content ILIKE $2 OR u.username ILIKE $2 OR u.name ILIKE $2)
+     ORDER BY c.created_at DESC
+     LIMIT $3`,
+    [q, `%${q}%`, Math.min(Math.max(limit, 1), 100)],
+  )) as Row[];
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    content: String(row.content ?? ""),
+    created_at: new Date(row.created_at as string | Date).toISOString(),
+    post_id: String(row.post_id),
+    post_caption: String(row.post_caption ?? ""),
+    author: {
+      id: String(row.author_id),
+      username:
+        (row.username as string) ||
+        mediaUsername(row.author_name as string, row.author_email as string),
+      full_name: mediaFullName(row.author_name as string, row.author_email as string),
+      avatar_url: mediaAvatar(
+        row.author_name as string,
+        row.author_email as string,
+        row.author_avatar as string,
+      ),
+    },
+  }));
+}
+
+export type AdminStoryRow = {
+  id: string;
+  kind: string;
+  url: string;
+  caption: string;
+  created_at: string;
+  expires_at: string;
+  view_count: number;
+  author: { id: string; username: string; full_name: string; avatar_url: string };
+};
+
+export async function listAdminStories(query = "", limit = 40): Promise<AdminStoryRow[]> {
+  const sql = getSql();
+  const q = query.trim();
+  const rows = (await sql.query(
+    `SELECT s.id, s.kind, s.url, s.caption, s.created_at, s.expires_at,
+            u.id AS author_id, u.username, u.name AS author_name,
+            u.email AS author_email, u.avatar_url AS author_avatar,
+            (SELECT COUNT(*)::int FROM media_story_views v WHERE v.story_id = s.id) AS view_count
+     FROM media_stories s
+     JOIN users u ON u.id = s.user_id
+     WHERE ($1 = '' OR s.caption ILIKE $2 OR u.username ILIKE $2 OR u.name ILIKE $2)
+     ORDER BY s.created_at DESC
+     LIMIT $3`,
+    [q, `%${q}%`, Math.min(Math.max(limit, 1), 100)],
+  )) as Row[];
+
+  return rows.map((row) => ({
+    id: String(row.id),
+    kind: String(row.kind ?? "image"),
+    url: String(row.url ?? ""),
+    caption: String(row.caption ?? ""),
+    created_at: new Date(row.created_at as string | Date).toISOString(),
+    expires_at: new Date(row.expires_at as string | Date).toISOString(),
+    view_count: Number(row.view_count) || 0,
+    author: {
+      id: String(row.author_id),
+      username:
+        (row.username as string) ||
+        mediaUsername(row.author_name as string, row.author_email as string),
+      full_name: mediaFullName(row.author_name as string, row.author_email as string),
+      avatar_url: mediaAvatar(
+        row.author_name as string,
+        row.author_email as string,
+        row.author_avatar as string,
+      ),
+    },
+  }));
 }
 
 export async function pendingFollowRequests(

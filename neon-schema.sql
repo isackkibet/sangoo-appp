@@ -251,3 +251,14 @@ CREATE TABLE IF NOT EXISTS media_reports (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_media_reports_status ON media_reports (status, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS sango_news_videos (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  title TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL DEFAULT '',
+  source TEXT NOT NULL DEFAULT '',
+  published_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_sango_news_videos_published ON sango_news_videos (published_at DESC);
